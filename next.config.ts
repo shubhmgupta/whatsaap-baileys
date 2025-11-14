@@ -1,7 +1,16 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  serverExternalPackages: [
+    '@whiskeysockets/baileys',
+    'pino',
+    'pino-pretty',
+    'qrcode',
+    'sharp',
+    'jimp',
+    'thread-stream'
+  ],
+  turbopack: {},
 };
 
 export default nextConfig;
