@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Search, Plus, Minus, RefreshCw } from 'lucide-react';
 
 interface User {
-  id: string;
+  id: number;
   email: string;
   name: string | null;
   credits: number;
@@ -27,13 +27,23 @@ export default function AdminUsersPage() {
 
   const loadUsers = async () => {
     try {
-      const response = await fetch('/api/admin/users');
+      const response = await fetch('/api/admin/users', {
+        credentials: 'include',
+      });
+      console.log('Response status:', response.status);
+      
       if (response.ok) {
         const data = await response.json();
+        console.log('Users loaded:', data);
         setUsers(data);
+      } else {
+        const error = await response.json();
+        console.error('Failed to load users:', error);
+        alert(`Failed to load users: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Failed to load users:', error);
+      alert('Network error while loading users');
     } finally {
       setLoading(false);
     }
@@ -47,6 +57,7 @@ export default function AdminUsersPage() {
     try {
       const response = await fetch(`/api/admin/users/${selectedUser.id}/credits`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           amount: parseInt(creditAmount),
@@ -55,12 +66,15 @@ export default function AdminUsersPage() {
       });
 
       if (response.ok) {
+        const result = await response.json();
         await loadUsers();
         setShowModal(false);
         setSelectedUser(null);
         setCreditAmount('');
+        alert(`✅ Successfully updated credits! New balance: ${result.user.credits} credits`);
       } else {
-        alert('Failed to update credits');
+        const error = await response.json();
+        alert(`❌ Failed to update credits: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error updating credits:', error);
@@ -90,12 +104,12 @@ export default function AdminUsersPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <>
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Manage Users</h1>
-          <p className="text-gray-600 mt-1">View and manage user credits</p>
+          <h1 className="text-2xl font-bold text-white">Manage Users</h1>
+          <p className="text-gray-400 mt-1">View and manage user credits</p>
         </div>
         <button
           onClick={loadUsers}
@@ -108,81 +122,81 @@ export default function AdminUsersPage() {
 
       {/* Search */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-5 h-5" />
         <input
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search by email or name..."
-          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+          className="w-full pl-10 pr-4 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <p className="text-gray-600 text-sm">Total Users</p>
-          <p className="text-3xl font-bold text-gray-900 mt-2">{users.length}</p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 my-6">
+        <div className="bg-gray-800/50 backdrop-blur-sm p-6 rounded-lg border border-gray-700/50">
+          <p className="text-gray-400 text-sm">Total Users</p>
+          <p className="text-3xl font-bold text-white mt-2">{users.length}</p>
         </div>
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <p className="text-gray-600 text-sm">Total Credits Issued</p>
-          <p className="text-3xl font-bold text-gray-900 mt-2">
+        <div className="bg-gray-800/50 backdrop-blur-sm p-6 rounded-lg border border-gray-700/50">
+          <p className="text-gray-400 text-sm">Total Credits Issued</p>
+          <p className="text-3xl font-bold text-white mt-2">
             {users.reduce((sum, user) => sum + user.credits, 0).toLocaleString()}
           </p>
         </div>
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <p className="text-gray-600 text-sm">Admin Users</p>
-          <p className="text-3xl font-bold text-gray-900 mt-2">
+        <div className="bg-gray-800/50 backdrop-blur-sm p-6 rounded-lg border border-gray-700/50">
+          <p className="text-gray-400 text-sm">Admin Users</p>
+          <p className="text-3xl font-bold text-white mt-2">
             {users.filter((u) => u.role === 'admin').length}
           </p>
         </div>
       </div>
 
       {/* Users Table */}
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
+      <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg border border-gray-700/50 overflow-hidden">
         <table className="w-full">
-          <thead className="bg-gray-50 border-b">
+          <thead className="bg-gray-900/50 border-b border-gray-700">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                 User
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                 Email
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                 Credits
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                 Role
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                 Joined
               </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
                 Actions
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200">
+          <tbody className="divide-y divide-gray-700">
             {filteredUsers.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                <td colSpan={6} className="px-6 py-12 text-center text-gray-400">
                   {searchQuery ? 'No users found matching your search.' : 'No users found.'}
                 </td>
               </tr>
             ) : (
               filteredUsers.map((user) => (
-                <tr key={user.id} className="hover:bg-gray-50">
+                <tr key={user.id} className="hover:bg-gray-700/30 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="font-medium text-gray-900">
+                    <div className="font-medium text-white">
                       {user.name || 'Unknown'}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-gray-900">{user.email}</div>
+                    <div className="text-gray-300">{user.email}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-gray-900 font-semibold">
+                    <div className="text-blue-400 font-semibold">
                       {user.credits.toLocaleString()}
                     </div>
                   </td>
@@ -190,20 +204,20 @@ export default function AdminUsersPage() {
                     <span
                       className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${
                         user.role === 'admin'
-                          ? 'bg-purple-100 text-purple-800'
-                          : 'bg-gray-100 text-gray-800'
+                          ? 'bg-purple-500/20 text-purple-400 border border-purple-500/50'
+                          : 'bg-gray-700 text-gray-300'
                       }`}
                     >
                       {user.role}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
                     {new Date(user.createdAt).toLocaleDateString()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <button
                       onClick={() => openCreditModal(user)}
-                      className="text-blue-600 hover:text-blue-900"
+                      className="text-blue-400 hover:text-blue-300 transition-colors"
                     >
                       Manage Credits
                     </button>
@@ -217,64 +231,64 @@ export default function AdminUsersPage() {
 
       {/* Credit Modal */}
       {showModal && selectedUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800/95 backdrop-blur-sm border border-gray-700/50 rounded-lg p-6 w-full max-w-md shadow-2xl">
+            <h2 className="text-xl font-bold text-white mb-4">
               Manage Credits for {selectedUser.name || selectedUser.email}
             </h2>
             
-            <div className="mb-4 p-4 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-600">Current Credits</p>
-              <p className="text-2xl font-bold text-gray-900">
+            <div className="mb-4 p-4 bg-gray-900/50 border border-gray-700/50 rounded-lg">
+              <p className="text-sm text-gray-400">Current Credits</p>
+              <p className="text-2xl font-bold text-blue-400">
                 {selectedUser.credits.toLocaleString()}
               </p>
             </div>
 
             <form onSubmit={handleCreditUpdate} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
                   Operation
                 </label>
                 <div className="flex gap-4">
-                  <label className="flex items-center">
+                  <label className="flex items-center cursor-pointer">
                     <input
                       type="radio"
                       name="operation"
                       value="add"
                       checked={creditOperation === 'add'}
                       onChange={(e) => setCreditOperation(e.target.value as 'add' | 'set')}
-                      className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-600"
+                      className="w-4 h-4 text-blue-500 bg-gray-700 border-gray-600 focus:ring-blue-500 focus:ring-2"
                     />
-                    <span className="ml-2 text-sm text-gray-700">Add Credits</span>
+                    <span className="ml-2 text-sm text-gray-300">Add Credits</span>
                   </label>
-                  <label className="flex items-center">
+                  <label className="flex items-center cursor-pointer">
                     <input
                       type="radio"
                       name="operation"
                       value="set"
                       checked={creditOperation === 'set'}
                       onChange={(e) => setCreditOperation(e.target.value as 'add' | 'set')}
-                      className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-600"
+                      className="w-4 h-4 text-blue-500 bg-gray-700 border-gray-600 focus:ring-blue-500 focus:ring-2"
                     />
-                    <span className="ml-2 text-sm text-gray-700">Set Credits</span>
+                    <span className="ml-2 text-sm text-gray-300">Set Credits</span>
                   </label>
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
                   {creditOperation === 'add' ? 'Credits to Add' : 'New Credit Amount'}
                 </label>
                 <input
                   type="number"
                   value={creditAmount}
                   onChange={(e) => setCreditAmount(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                  className="w-full px-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="100"
                   required
                 />
-                {creditOperation === 'add' && creditAmount && (
-                  <p className="text-sm text-gray-600 mt-2">
+                {creditOperation === 'add' && creditAmount && !isNaN(parseInt(creditAmount)) && (
+                  <p className="text-sm text-green-400 mt-2">
                     New balance: {(selectedUser.credits + parseInt(creditAmount)).toLocaleString()} credits
                   </p>
                 )}
@@ -288,13 +302,13 @@ export default function AdminUsersPage() {
                     setSelectedUser(null);
                     setCreditAmount('');
                   }}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                  className="flex-1 px-4 py-2 border border-gray-600 rounded-lg text-gray-300 hover:bg-gray-700/50 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
                   Update Credits
                 </button>
@@ -303,6 +317,6 @@ export default function AdminUsersPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

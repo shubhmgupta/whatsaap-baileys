@@ -33,28 +33,42 @@ async function verifyAdmin(request: NextRequest) {
 
 // GET - List all users
 export async function GET(request: NextRequest) {
+  console.log('GET /api/admin/users called');
+  
   const admin = await verifyAdmin(request);
   
   if (!admin) {
+    console.log('Unauthorized access attempt');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  console.log('Admin verified:', admin.email);
 
   try {
     const allUsers = await db
       .select({
         id: users.id,
         email: users.email,
-        name: users.fullname,
+        fullname: users.fullname,
         credits: users.credits,
         role: users.role,
         createdAt: users.createdAt,
       })
       .from(users);
 
-    return NextResponse.json(allUsers);
+    console.log('Users fetched from DB:', allUsers.length);
+
+    // Map fullname to name for frontend
+    const mappedUsers = allUsers.map(user => ({
+      ...user,
+      name: user.fullname,
+    }));
+
+    console.log('Returning users:', mappedUsers);
+    return NextResponse.json(mappedUsers);
   } catch (error) {
     console.error('Error fetching users:', error);
-    return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to fetch users', details: String(error) }, { status: 500 });
   }
 }
 

@@ -17,13 +17,17 @@ export default function AdminDashboard() {
   }, []);
 
   const loadStats = async () => {
-    // TODO: Implement API endpoints for admin stats
-    setStats({
-      totalUsers: 0,
-      totalRevenue: 0,
-      activePlans: 3,
-      pendingPayments: 0,
-    });
+    try {
+      const response = await fetch('/api/admin/stats', {
+        credentials: 'include',
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setStats(data);
+      }
+    } catch (error) {
+      console.error('Failed to load stats:', error);
+    }
   };
 
   const quickActions = [
