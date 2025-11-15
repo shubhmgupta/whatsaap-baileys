@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Send, Phone, Loader2, Search, User } from 'lucide-react';
+import { ArrowLeft, Send, Phone, Loader2, Search, User, Image as ImageIcon, File, FileText, Music, Video, Download } from 'lucide-react';
 import Link from 'next/link';
 
 interface Contact {
@@ -17,6 +17,7 @@ interface Message {
   isFromMe: boolean;
   timestamp: string;
   mediaType: string | null;
+  mediaUrl: string | null;
 }
 
 export default function InboxPage() {
@@ -28,6 +29,7 @@ export default function InboxPage() {
   const [loading, setLoading] = useState(false);
   const [sendLoading, setSendLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -87,33 +89,159 @@ export default function InboxPage() {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !selectedContact || !user) return;
+    if ((!newMessage.trim() && !selectedFile) || !selectedContact || !user) return;
 
     setSendLoading(true);
     try {
-      const res = await fetch('/api/message/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: user.id,
-          phoneNumber: selectedContact.phoneNumber,
-          message: newMessage,
-        }),
-      });
+      if (selectedFile) {
+        // Send file
+        const formData = new FormData();
+        formData.append('userId', user.id.toString());
+        formData.append('phoneNumber', selectedContact.phoneNumber);
+        formData.append('message', newMessage || '');
+        formData.append('file', selectedFile);
 
-      if (res.ok) {
-        setNewMessage('');
-        // Reload messages to show the sent message
-        await loadMessages(selectedContact.id, selectedContact.phoneNumber);
+        const res = await fetch('/api/message/send', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (res.ok) {
+          setNewMessage('');
+          setSelectedFile(null);
+          await loadMessages(selectedContact.id, selectedContact.phoneNumber);
+        } else {
+          const data = await res.json();
+          alert(data.error || 'Failed to send message');
+        }
       } else {
-        const data = await res.json();
-        alert(data.error || 'Failed to send message');
+        // Send text only
+        const res = await fetch('/api/message/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: user.id,
+            phoneNumber: selectedContact.phoneNumber,
+            message: newMessage,
+          }),
+        });
+
+        if (res.ok) {
+          setNewMessage('');
+          await loadMessages(selectedContact.id, selectedContact.phoneNumber);
+        } else {
+          const data = await res.json();
+          alert(data.error || 'Failed to send message');
+        }
       }
     } catch (error) {
       console.error('Failed to send message:', error);
       alert('Failed to send message');
     } finally {
       setSendLoading(false);
+    }
+  };
+
+  const getMediaIcon = (mediaType: string | null) => {
+    switch (mediaType) {
+      case 'image':
+        return <ImageIcon className="w-4 h-4" />;
+      case 'video':
+        return <Video className="w-4 h-4" />;
+      case 'audio':
+        return <Music className="w-4 h-4" />;
+      case 'document':
+        return <FileText className="w-4 h-4" />;
+      default:
+        return <File className="w-4 h-4" />;
+    }
+  };
+
+  const renderMedia = (msg: Message) => {
+    if (!msg.mediaUrl) return null;
+
+    switch (msg.mediaType) {
+      case 'image':
+        return (
+          <div className="mt-2">
+            <div className="relative group">
+              <img
+                src={msg.mediaUrl}
+                alt="Shared image"
+                className="max-w-[200px] max-h-[150px] object-cover rounded-lg cursor-pointer hover:opacity-90 transition"
+                onClick={() => window.open(msg.mediaUrl!, '_blank')}
+              />
+              <a
+                href={msg.mediaUrl}
+                download
+                className="absolute top-2 right-2 p-1.5 bg-black/70 hover:bg-black/90 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Download className="w-3 h-3 text-white" />
+              </a>
+            </div>
+            <div className="flex gap-2 mt-2">
+              <button
+                onClick={() => window.open(msg.mediaUrl!, '_blank')}
+                className="flex-1 flex items-center justify-center gap-1 p-1.5 bg-black/20 rounded hover:bg-black/30 transition text-xs"
+              >
+                <ImageIcon className="w-3 h-3" />
+                View Full
+              </button>
+              <a
+                href={msg.mediaUrl}
+                download
+                className="flex-1 flex items-center justify-center gap-1 p-1.5 bg-black/20 rounded hover:bg-black/30 transition text-xs"
+              >
+                <Download className="w-3 h-3" />
+                Download
+              </a>
+            </div>
+          </div>
+        );
+      case 'video':
+        return (
+          <div className="mt-2">
+            <video
+              src={msg.mediaUrl}
+              controls
+              className="max-w-full max-h-[300px] sm:max-h-[400px] rounded-lg"
+            />
+            <a
+              href={msg.mediaUrl}
+              download
+              className="flex items-center justify-center gap-2 p-2 bg-black/20 rounded hover:bg-black/30 transition text-xs mt-2"
+            >
+              <Download className="w-3 h-3" />
+              Download Video
+            </a>
+          </div>
+        );
+      case 'audio':
+        return (
+          <div className="mt-2">
+            <audio src={msg.mediaUrl} controls className="w-full" />
+            <a
+              href={msg.mediaUrl}
+              download
+              className="flex items-center justify-center gap-2 p-2 bg-black/20 rounded hover:bg-black/30 transition text-xs mt-2"
+            >
+              <Download className="w-3 h-3" />
+              Download Audio
+            </a>
+          </div>
+        );
+      default:
+        return (
+          <a
+            href={msg.mediaUrl}
+            download
+            className="mt-2 flex items-center gap-2 p-2 bg-black/20 rounded hover:bg-black/30 transition"
+          >
+            <Download className="w-4 h-4" />
+            <span className="text-sm">Download {msg.mediaType}</span>
+          </a>
+        );
     }
   };
 
@@ -260,12 +388,23 @@ export default function InboxPage() {
                               : 'bg-gray-700 text-white'
                           }`}
                         >
-                          <p className="text-sm break-words">{msg.message}</p>
-                          {msg.mediaType && (
-                            <p className="text-xs opacity-75 mt-1 capitalize">
-                              📎 {msg.mediaType}
-                            </p>
+                          {msg.message && (
+                            <p className="text-sm break-words">{msg.message}</p>
                           )}
+                          
+                          {msg.mediaType && msg.mediaUrl && (
+                            <div className="mt-2">
+                              {renderMedia(msg)}
+                            </div>
+                          )}
+                          
+                          {msg.mediaType && !msg.mediaUrl && (
+                            <div className="flex items-center gap-2 text-xs opacity-75 mt-1">
+                              {getMediaIcon(msg.mediaType)}
+                              <span className="capitalize">{msg.mediaType}</span>
+                            </div>
+                          )}
+                          
                           <p className="text-xs opacity-75 mt-1">
                             {new Date(msg.timestamp).toLocaleTimeString()}
                           </p>
@@ -278,7 +417,35 @@ export default function InboxPage() {
 
                 {/* Message Input */}
                 <form onSubmit={handleSendMessage} className="p-4 border-t border-gray-700/50">
+                  {selectedFile && (
+                    <div className="mb-2 p-2 bg-gray-700/50 rounded-lg flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-sm text-gray-300">
+                        <File className="w-4 h-4" />
+                        <span>{selectedFile.name}</span>
+                        <span className="text-xs text-gray-500">
+                          ({(selectedFile.size / 1024).toFixed(1)} KB)
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedFile(null)}
+                        className="text-red-400 hover:text-red-300"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
                   <div className="flex gap-2">
+                    <label className="px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-gray-300 hover:bg-gray-600 transition cursor-pointer flex items-center gap-2">
+                      <File className="w-5 h-5" />
+                      <input
+                        type="file"
+                        onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                        className="hidden"
+                        accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx"
+                        disabled={sendLoading}
+                      />
+                    </label>
                     <input
                       type="text"
                       value={newMessage}
@@ -289,7 +456,7 @@ export default function InboxPage() {
                     />
                     <button
                       type="submit"
-                      disabled={sendLoading || !newMessage.trim()}
+                      disabled={sendLoading || (!newMessage.trim() && !selectedFile)}
                       className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                     >
                       {sendLoading ? (
