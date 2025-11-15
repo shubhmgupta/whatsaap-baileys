@@ -14,11 +14,17 @@ export async function GET(request: Request) {
         
         // Check if socket exists and is connected
         const connected = !!(session?.connected || session?.sock?.user);
+        const hasSocket = !!session?.sock;
+        const isConnecting = session?.connecting || false;
+        
+        console.log(`Status check for user ${userId}: connected=${connected}, hasSocket=${hasSocket}, isConnecting=${isConnecting}`);
         
         return NextResponse.json({ 
             connected,
             user: session?.sock?.user || null,
-            socketExists: !!session?.sock
+            socketExists: hasSocket,
+            connecting: isConnecting,
+            lastConnected: session?.lastConnected || null
         });
     } catch (error) {
         console.error('Status check error:', error);

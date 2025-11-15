@@ -28,6 +28,8 @@ export default function Dashboard() {
   const [selectedContacts, setSelectedContacts] = useState<any[]>([]);
   const [bulkSendMode, setBulkSendMode] = useState<'both' | 'text' | 'file'>('both');
   const [bulkFile, setBulkFile] = useState<File | null>(null);
+  const [incomingMessages, setIncomingMessages] = useState<any[]>([]);
+  const [showInbox, setShowInbox] = useState(false);
 
   useEffect(() => {
     // Get user from session storage (temporary - replace with proper session management)
@@ -41,6 +43,14 @@ export default function Dashboard() {
       
       // Load contacts
       loadContacts(parsedUser.id);
+      
+      // Continuously check connection status every 5 seconds
+      const statusInterval = setInterval(() => {
+        checkConnectionStatus(parsedUser.id);
+      }, 5000);
+      
+      // Cleanup interval on unmount
+      return () => clearInterval(statusInterval);
     }
   }, []);
 
@@ -53,6 +63,19 @@ export default function Dashboard() {
       }
     } catch (error) {
       console.error('Failed to load contacts:', error);
+    }
+  };
+
+  const loadIncomingMessages = async () => {
+    try {
+      const res = await fetch(`/api/messages/incoming?userId=${user?.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setIncomingMessages(data.messages || []);
+        setShowInbox(true);
+      }
+    } catch (error) {
+      console.error('Failed to load incoming messages:', error);
     }
   };
 
@@ -116,22 +139,34 @@ export default function Dashboard() {
       if (res.ok) {
         setQrCode(data.qr);
         setConnected(false);
+        setSuccess('QR code generated. Please scan with WhatsApp.');
         
-        // Poll for connection status
+        // Poll for connection status continuously
         const interval = setInterval(async () => {
-          const statusRes = await fetch(`/api/auth/status?userId=${user?.id || 1}`);
-          if (statusRes.ok) {
-            const statusData = await statusRes.json();
-            if (statusData.connected) {
-              setConnected(true);
-              setQrCode('');
-              clearInterval(interval);
+          try {
+            const statusRes = await fetch(`/api/auth/status?userId=${user?.id || 1}`);
+            if (statusRes.ok) {
+              const statusData = await statusRes.json();
+              console.log('Status check:', statusData);
+              if (statusData.connected) {
+                setConnected(true);
+                setQrCode('');
+                setSuccess('WhatsApp connected successfully!');
+                clearInterval(interval);
+                // Reload contacts after connection
+                if (user?.id) {
+                  loadContacts(user.id);
+                }
+              }
             }
+          } catch (err) {
+            console.error('Status check error:', err);
           }
         }, 2000);
 
-        // Stop polling after 2 minutes
-        setTimeout(() => clearInterval(interval), 120000);
+        // Don't stop polling - let it run until connected
+        // Store interval reference if needed to clear later
+        (window as any).statusCheckInterval = interval;
       } else {
         setError(data.error || 'Failed to generate QR code');
       }
@@ -370,17 +405,27 @@ export default function Dashboard() {
             <div className="bg-gray-800/50 backdrop-blur-sm p-6 rounded-xl border border-gray-700/50">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-bold text-white">WhatsApp Connection</h2>
-                {connected ? (
-                  <div className="flex items-center gap-2 text-green-400">
-                    <Wifi className="w-5 h-5" />
-                    <span className="text-sm">Connected</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 text-gray-400">
-                    <WifiOff className="w-5 h-5" />
-                    <span className="text-sm">Disconnected</span>
-                  </div>
-                )}
+                <div className="flex items-center gap-3">
+                  {connected ? (
+                    <div className="flex items-center gap-2 text-green-400">
+                      <Wifi className="w-5 h-5" />
+                      <span className="text-sm">Connected</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-gray-400">
+                      <WifiOff className="w-5 h-5" />
+                      <span className="text-sm">Disconnected</span>
+                    </div>
+                  )}
+                  {connected && (
+                    <button
+                      onClick={loadIncomingMessages}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-sm font-semibold transition-colors"
+                    >
+                      Inbox
+                    </button>
+                  )}
+                </div>
               </div>
 
               {error && (
@@ -841,6 +886,62 @@ export default function Dashboard() {
                   )}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Inbox Modal */}
+      {showInbox && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-gray-800 rounded-xl p-6 max-w-4xl w-full max-h-[80vh] overflow-hidden flex flex-col border border-gray-700">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-bold text-white">Incoming Messages</h2>
+              <button
+                onClick={() => setShowInbox(false)}
+                className="p-2 hover:bg-gray-700 rounded-lg transition"
+              >
+                <X className="w-6 h-6 text-gray-400" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-3">
+              {incomingMessages.length === 0 ? (
+                <div className="text-center py-12 text-gray-400">
+                  <p>No incoming messages yet</p>
+                </div>
+              ) : (
+                incomingMessages.map((msg) => (
+                  <div key={msg.id} className="bg-gray-700/50 p-4 rounded-lg border border-gray-600/50">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Phone className="w-4 h-4 text-blue-400" />
+                        <span className="text-blue-400 font-semibold">{msg.phoneNumber}</span>
+                      </div>
+                      <span className="text-xs text-gray-500">
+                        {new Date(msg.timestamp).toLocaleString()}
+                      </span>
+                    </div>
+                    <p className="text-gray-300">{msg.message}</p>
+                    {msg.mediaType && (
+                      <div className="mt-2 text-sm text-gray-400 flex items-center gap-1">
+                        {msg.mediaType === 'image' && <Image className="w-4 h-4" />}
+                        {msg.mediaType === 'document' && <File className="w-4 h-4" />}
+                        <span className="capitalize">{msg.mediaType}</span>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="mt-4">
+              <button
+                onClick={() => setShowInbox(false)}
+                className="w-full bg-gray-600 hover:bg-gray-500 text-white py-2 rounded-lg transition"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

@@ -12,6 +12,82 @@ const sessions = new Map<string, any>();
 const messageStore = new Map<string, any[]>(); // Store messages in memory per user
 const reconnectingUsers = new Set<string>(); // Track users currently reconnecting
 const qrResolvers = new Map<string, any>(); // Store QR promise resolvers
+const reconnectAttempts = new Map<string, number>(); // Track reconnection attempts
+let isInitialized = false;
+
+// Restore existing sessions on startup
+async function initializeSessions() {
+  if (isInitialized) return;
+  isInitialized = true;
+  
+  try {
+    const sessionsDir = path.join(process.cwd(), 'sessions');
+    
+    // Check if sessions directory exists
+    if (!await fs.pathExists(sessionsDir)) {
+      console.log('📁 No existing sessions to restore');
+      return;
+    }
+    
+    // Get all session directories
+    const userDirs = await fs.readdir(sessionsDir);
+    
+    for (const dir of userDirs) {
+      if (dir.startsWith('user_')) {
+        const userId = dir.replace('user_', '');
+        const sessionPath = path.join(sessionsDir, dir);
+        
+        // Check if session has auth credentials
+        const credsPath = path.join(sessionPath, 'creds.json');
+        if (await fs.pathExists(credsPath)) {
+          console.log(`🔄 Restoring WhatsApp session for user ${userId}...`);
+          
+          // Start session in background
+          createBaileysSession(userId).catch(err => {
+            console.error(`Failed to restore session for user ${userId}:`, err);
+          });
+        }
+      }
+    }
+    
+    console.log('✅ Session restoration complete');
+  } catch (error) {
+    console.error('Error initializing sessions:', error);
+  }
+}
+
+// Initialize sessions on module load
+initializeSessions();
+
+// Heartbeat mechanism to keep connections alive
+const heartbeatIntervals = new Map<string, NodeJS.Timeout>();
+
+function startHeartbeat(userId: string, sock: any) {
+  // Clear existing heartbeat if any
+  if (heartbeatIntervals.has(userId)) {
+    clearInterval(heartbeatIntervals.get(userId));
+  }
+  
+  // Send a presence update every 30 seconds to keep connection alive
+  const interval = setInterval(async () => {
+    try {
+      if (sock?.user) {
+        await sock.sendPresenceUpdate('available');
+      }
+    } catch (error) {
+      // Ignore errors, connection will auto-reconnect if needed
+    }
+  }, 30000);
+  
+  heartbeatIntervals.set(userId, interval);
+}
+
+function stopHeartbeat(userId: string) {
+  if (heartbeatIntervals.has(userId)) {
+    clearInterval(heartbeatIntervals.get(userId));
+    heartbeatIntervals.delete(userId);
+  }
+}
 
 // Global error handlers for unhandled rejections
 process.on('unhandledRejection', (reason: any, promise) => {
@@ -46,11 +122,14 @@ async function createBaileysSession(userId: string) {
       version,
       logger: pino({ level: 'silent' }), // Reduce log noise
       browser: ['Codefy', 'Chrome', '120.0.0'],
-      connectTimeoutMs: 60000, // 60 second timeout
+      connectTimeoutMs: 60000,
       defaultQueryTimeoutMs: 60000,
-      keepAliveIntervalMs: 30000,
-      qrTimeout: 60000, // QR timeout
+      keepAliveIntervalMs: 10000, // Send keepalive every 10 seconds
+      qrTimeout: 60000,
       retryRequestDelayMs: 250,
+      generateHighQualityLinkPreview: true,
+      syncFullHistory: false, // Don't sync full history to reduce load
+      markOnlineOnConnect: true,
     });
 
   sock.ev.on('connection.update', async (update) => {
@@ -75,23 +154,40 @@ async function createBaileysSession(userId: string) {
       // Clean up reconnecting flag
       reconnectingUsers.delete(userId);
       
+      // Stop heartbeat on disconnect
+      stopHeartbeat(userId);
+      
       if (shouldReconnect) {
-        // If it's a conflict, don't reconnect automatically - wait for user to request new QR
-        if (statusCode === DisconnectReason.connectionReplaced) {
-          console.log('Connection conflict. Clearing session data. User needs to generate new QR.');
-          const sessionDir = path.join(process.cwd(), `sessions/user_${userId}`);
-          await fs.remove(sessionDir).catch(err => console.error('Failed to remove session directory:', err));
-          sessions.delete(userId); // Clear session completely
-          messageStore.delete(userId);
-          qrResolvers.delete(userId);
-          // Don't reconnect automatically on conflict
+        // Handle different disconnect reasons
+        if (statusCode === DisconnectReason.connectionReplaced || statusCode === 401) {
+          console.log('⚠️ Connection replaced/conflict. Keeping session but requiring new scan.');
+          // Don't clear session files, just clear the active connection
+          sessions.set(userId, { ...sessions.get(userId), connected: false, sock: null });
           return;
         }
 
-        // For other errors, automatically reconnect (keep WhatsApp connected)
-        console.log(`🔄 Auto-reconnecting WhatsApp for user ${userId} in 3 seconds...`);
+        if (statusCode === DisconnectReason.restartRequired || statusCode === 515) {
+          console.log(`🔄 Restart required for user ${userId}. Reconnecting with existing session...`);
+          // Keep session data, just reconnect
+          sessions.set(userId, { ...sessions.get(userId), connected: false });
+          
+          setTimeout(() => {
+            if (!sessions.get(userId)?.connected && !reconnectingUsers.has(userId)) {
+              console.log(`🔄 Restarting connection for user ${userId}...`);
+              createBaileysSession(userId).catch(err => {
+                console.error('Error restarting session:', err);
+                reconnectingUsers.delete(userId);
+              });
+            }
+          }, 2000);
+          return;
+        }
+
+        // For other errors, automatically reconnect
+        console.log(`🔄 Auto-reconnecting WhatsApp for user ${userId} in 5 seconds...`);
+        sessions.set(userId, { ...sessions.get(userId), connected: false });
+        
         setTimeout(() => {
-          // Only reconnect if not already connected and not in progress
           if (!sessions.get(userId)?.connected && !reconnectingUsers.has(userId)) {
             console.log(`🔄 Attempting reconnection for user ${userId}...`);
             createBaileysSession(userId).catch(err => {
@@ -99,24 +195,42 @@ async function createBaileysSession(userId: string) {
               reconnectingUsers.delete(userId);
             });
           }
-        }, 3000);
+        }, 5000);
       } else {
         // Only clear session if user explicitly logged out from WhatsApp
         console.log(`🔌 User ${userId} logged out from WhatsApp`);
         sessions.delete(userId);
         messageStore.delete(userId);
         qrResolvers.delete(userId);
+        const sessionDir = path.join(process.cwd(), `sessions/user_${userId}`);
+        await fs.remove(sessionDir).catch(err => console.error('Failed to remove session directory:', err));
       }
     } else if (connection === 'open') {
       console.log('✅ WhatsApp connected successfully for user:', userId);
-      reconnectingUsers.delete(userId); // Clear reconnecting flag on successful connection
+      reconnectingUsers.delete(userId);
+      reconnectAttempts.delete(userId); // Reset reconnection attempts on success
+      
       try {
         const session = JSON.stringify(state);
         await db.update(users).set({ whatsappSession: session }).where(eq(users.id, parseInt(userId)));
-        sessions.set(userId, { ...sessions.get(userId), sock, connected: true });
+        
+        // Update session with all connection details
+        sessions.set(userId, { 
+          ...sessions.get(userId), 
+          sock, 
+          connected: true,
+          user: sock.user,
+          lastConnected: new Date()
+        });
+        
+        // Start heartbeat to keep connection alive
+        startHeartbeat(userId, sock);
       } catch (error) {
         console.error('Error updating session in database:', error);
       }
+    } else if (connection === 'connecting') {
+      console.log('🔄 WhatsApp connecting for user:', userId);
+      sessions.set(userId, { ...sessions.get(userId), connecting: true, connected: false });
     }
   });
 
@@ -223,18 +337,25 @@ export async function getSession(userId: string) {
   const existingSession = sessions.get(userId);
   
   // If already connected, return the session
-  if (existingSession?.connected && existingSession?.sock) {
-    console.log('Using existing connected session for user:', userId);
+  if (existingSession?.connected && existingSession?.sock?.user) {
+    console.log('✅ Using existing connected session for user:', userId);
     return existingSession;
   }
   
-  // If session doesn't exist or socket is closed, create/recreate it
-  if (!existingSession || !existingSession?.sock) {
+  // If session exists but not connected, check if socket is still valid
+  if (existingSession?.sock && !existingSession?.connected) {
+    console.log('⏳ Session exists but not connected for user:', userId);
+    return existingSession;
+  }
+  
+  // Only create new session if none exists
+  if (!existingSession || (!existingSession.sock && !reconnectingUsers.has(userId))) {
+    console.log('🆕 Creating new session for user:', userId);
     await createBaileysSession(userId);
     
     // Wait for QR code to be generated (up to 30 seconds)
     if (!sessions.get(userId)?.qr && !sessions.get(userId)?.connected) {
-      console.log('Waiting for QR code generation for user:', userId);
+      console.log('⏳ Waiting for QR code generation for user:', userId);
       await new Promise((resolve, reject) => {
         qrResolvers.set(userId, resolve);
         
@@ -268,6 +389,9 @@ export async function logoutSession(userId: string) {
         keysToDelete.forEach(key => messageStore.delete(key));
         reconnectingUsers.delete(userId);
         qrResolvers.delete(userId);
+        
+        // Stop heartbeat
+        stopHeartbeat(userId);
         
         // Clear session files
         const sessionDir = path.join(process.cwd(), `sessions/user_${userId}`);
