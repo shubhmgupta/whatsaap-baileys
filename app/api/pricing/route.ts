@@ -11,7 +11,6 @@ export async function GET() {
       .from(plans)
       .where(eq(plans.active, true));
     
-    console.log('Public API - Plans from DB:', JSON.stringify(activePlans, null, 2));
     return NextResponse.json(activePlans);
   } catch (error) {
     console.error('Error fetching plans:', error);

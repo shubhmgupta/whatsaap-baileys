@@ -42,13 +42,15 @@ export default function AdminPricingPage() {
       
       if (response.ok) {
         const data = await response.json();
-        console.log('Plans loaded:', data);
-        // Convert paise to rupees (database stores in paise)
-        const plansWithRupees = data.map((plan: Plan) => ({
-          ...plan,
-          price: Math.round(plan.price / 100)
-        }));
-        setPlans(plansWithRupees);
+        console.log('=== ADMIN PANEL PRICING DATA ===');
+        console.log('Raw data:', data);
+        data.forEach((plan: Plan) => {
+          console.log(`Plan: ${plan.name}`);
+          console.log(`  Price value: ${plan.price}`);
+          console.log(`  Price type: ${typeof plan.price}`);
+          console.log(`  Raw JSON: ${JSON.stringify(plan)}`);
+        });
+        setPlans(data);
       } else {
         const error = await response.json();
         console.error('Failed to load plans:', error);
@@ -78,7 +80,7 @@ export default function AdminPricingPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: formData.name,
-          price: parseInt(formData.price) * 100, // Convert rupees to paise for storage
+          price: parseInt(formData.price),
           credits: parseInt(formData.credits),
           features: formData.features || null,
           discountPercentage: formData.discountPercentage ? parseInt(formData.discountPercentage) : 0,

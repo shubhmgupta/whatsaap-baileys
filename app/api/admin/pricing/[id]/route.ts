@@ -51,7 +51,7 @@ export async function PUT(
       .update(plans)
       .set({
         name,
-        price: parseFloat(price),
+        price: parseInt(price),
         credits: parseInt(credits),
         features: features || null,
         discountPercentage: discountPercentage ? parseInt(discountPercentage) : 0,

@@ -35,14 +35,15 @@ export function PricingSection() {
     fetch('/api/pricing')
       .then((res) => res.json())
       .then((data) => {
-        console.log('PricingSection - Raw data from API:', data);
-        // Convert paise to rupees (database stores in paise)
-        const plansWithRupees = data.map((plan: Plan) => ({
-          ...plan,
-          price: Math.round(plan.price / 100)
-        }));
-        console.log('PricingSection - After conversion:', plansWithRupees);
-        setPlans(plansWithRupees);
+        console.log('=== HOMEPAGE PRICING DATA ===');
+        console.log('Raw data:', data);
+        data.forEach((plan: Plan) => {
+          console.log(`Plan: ${plan.name}`);
+          console.log(`  Price value: ${plan.price}`);
+          console.log(`  Price type: ${typeof plan.price}`);
+          console.log(`  Raw JSON: ${JSON.stringify(plan)}`);
+        });
+        setPlans(data);
         setLoading(false);
       })
       .catch((error) => {
@@ -77,7 +78,7 @@ export function PricingSection() {
           const color = colorMap[index % 3] || 'blue';
           const isPopular = plan.discountLabel && plan.discountLabel.toLowerCase().includes('popular');
           const originalPrice = plan.discountPercentage && plan.discountPercentage > 0
-            ? Math.round(plan.price / (1 - plan.discountPercentage / 100))
+            ? Math.round(plan.price * 100 / (100 - plan.discountPercentage))
             : null;
 
           return (
