@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { logoutSession } from '@/lib/baileys';
 
 export async function POST(request: Request) {
   try {
@@ -8,8 +7,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
-    await logoutSession(userId.toString());
-
+    // Don't disconnect WhatsApp when user logs out from web app
+    // WhatsApp connection should persist until user explicitly disconnects
+    
     const response = NextResponse.json({ message: 'Logged out successfully' });
     
     // Clear the authentication token cookie

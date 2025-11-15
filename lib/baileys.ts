@@ -45,7 +45,7 @@ async function createBaileysSession(userId: string) {
       printQRInTerminal: false,
       version,
       logger: pino({ level: 'silent' }), // Reduce log noise
-      browser: ['WhatsApp SaaS', 'Chrome', '120.0.0'],
+      browser: ['Codefy', 'Chrome', '120.0.0'],
       connectTimeoutMs: 60000, // 60 second timeout
       defaultQueryTimeoutMs: 60000,
       keepAliveIntervalMs: 30000,
@@ -88,17 +88,21 @@ async function createBaileysSession(userId: string) {
           return;
         }
 
-        // For other errors, wait before reconnecting
+        // For other errors, automatically reconnect (keep WhatsApp connected)
+        console.log(`🔄 Auto-reconnecting WhatsApp for user ${userId} in 3 seconds...`);
         setTimeout(() => {
           // Only reconnect if not already connected and not in progress
           if (!sessions.get(userId)?.connected && !reconnectingUsers.has(userId)) {
+            console.log(`🔄 Attempting reconnection for user ${userId}...`);
             createBaileysSession(userId).catch(err => {
               console.error('Error reconnecting session:', err);
               reconnectingUsers.delete(userId);
             });
           }
-        }, 5000);
+        }, 3000);
       } else {
+        // Only clear session if user explicitly logged out from WhatsApp
+        console.log(`🔌 User ${userId} logged out from WhatsApp`);
         sessions.delete(userId);
         messageStore.delete(userId);
         qrResolvers.delete(userId);

@@ -12,12 +12,13 @@ export async function GET(request: Request) {
 
         const session = await getSession(userId);
         
-        // Check if socket exists and has an active user connection
-        const connected = !!(session?.sock?.user);
+        // Check if socket exists and is connected
+        const connected = !!(session?.connected || session?.sock?.user);
         
         return NextResponse.json({ 
             connected,
-            user: session?.sock?.user || null
+            user: session?.sock?.user || null,
+            socketExists: !!session?.sock
         });
     } catch (error) {
         console.error('Status check error:', error);
