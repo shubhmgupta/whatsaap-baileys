@@ -7,7 +7,6 @@ import Link from 'next/link';
 export default function DashboardHome() {
   const [user, setUser] = useState<any>(null);
   const [connected, setConnected] = useState(false);
-  const [contacts, setContacts] = useState<any[]>([]);
 
   useEffect(() => {
     const userData = sessionStorage.getItem('user');
@@ -15,7 +14,6 @@ export default function DashboardHome() {
       const parsedUser = JSON.parse(userData);
       setUser(parsedUser);
       checkConnectionStatus(parsedUser.id);
-      loadContacts(parsedUser.id);
     }
   }, []);
 
@@ -31,18 +29,6 @@ export default function DashboardHome() {
     }
   };
 
-  const loadContacts = async (userId: number) => {
-    try {
-      const res = await fetch(`/api/contacts?userId=${userId}`);
-      if (res.ok) {
-        const data = await res.json();
-        setContacts(data.contacts || []);
-      }
-    } catch (error) {
-      console.error('Failed to load contacts:', error);
-    }
-  };
-
   const quickActions = [
     {
       title: 'Send Messages',
@@ -52,18 +38,18 @@ export default function DashboardHome() {
       color: 'from-green-500 to-emerald-600',
     },
     {
+      title: 'Manage Contacts',
+      description: 'Add and manage your contacts',
+      icon: Users,
+      href: '/dashboard/contacts',
+      color: 'from-purple-500 to-pink-600',
+    },
+    {
       title: 'Manage API Keys',
       description: 'Create and manage your API keys',
       icon: Key,
       href: '/dashboard/api-keys',
       color: 'from-blue-500 to-cyan-600',
-    },
-    {
-      title: 'Sync Messages',
-      description: 'Sync your WhatsApp chat history',
-      icon: RefreshCw,
-      href: '/dashboard/sync',
-      color: 'from-purple-500 to-pink-600',
     },
     {
       title: 'Documentation',
@@ -114,14 +100,14 @@ export default function DashboardHome() {
           <p className="text-gray-500 text-sm mt-1">Messages remaining</p>
         </div>
 
-        {/* Contacts */}
+        {/* API Keys */}
         <div className="bg-gray-800/50 backdrop-blur-sm p-6 rounded-xl border border-gray-700/50">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-gray-400 text-sm font-medium">Total Contacts</h3>
-            <Users className="w-5 h-5 text-blue-400" />
+            <h3 className="text-gray-400 text-sm font-medium">API Keys</h3>
+            <Key className="w-5 h-5 text-blue-400" />
           </div>
-          <p className="text-2xl font-bold text-white">{contacts.length}</p>
-          <p className="text-gray-500 text-sm mt-1">Saved contacts</p>
+          <p className="text-2xl font-bold text-white">Active</p>
+          <p className="text-gray-500 text-sm mt-1">Manage in settings</p>
         </div>
       </div>
 
@@ -153,40 +139,6 @@ export default function DashboardHome() {
         </div>
       </div>
 
-      {/* Recent Contacts */}
-      {contacts.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-white">Recent Contacts</h2>
-            <Link
-              href="/dashboard/messages"
-              className="text-green-400 hover:text-green-300 text-sm font-medium flex items-center gap-1"
-            >
-              View all
-              <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {contacts.slice(0, 6).map((contact) => (
-              <Link
-                key={contact.id}
-                href={`/dashboard/messages?contact=${contact.id}`}
-                className="bg-gray-800/50 backdrop-blur-sm p-4 rounded-xl border border-gray-700/50 hover:border-gray-600 transition-all"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-r from-green-500 to-blue-600 flex items-center justify-center text-white font-bold">
-                    {contact.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-white font-medium truncate">{contact.name}</p>
-                    <p className="text-gray-400 text-sm truncate">+{contact.phoneNumber}</p>
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

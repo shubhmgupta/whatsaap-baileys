@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { 
@@ -12,12 +12,23 @@ import {
   Users,
   Book, 
   LogOut,
-  ChevronRight 
+  ChevronRight,
+  Shield
 } from 'lucide-react';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const pathname = usePathname();
+
+  useEffect(() => {
+    // Check if user is admin
+    const userString = sessionStorage.getItem('user');
+    if (userString) {
+      const user = JSON.parse(userString);
+      setIsAdmin(user.role === 'admin');
+    }
+  }, []);
 
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
@@ -25,9 +36,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: 'API Keys', href: '/dashboard/api-keys', icon: Key },
     { name: 'Contacts', href: '/dashboard/contacts', icon: Users },
     { name: 'Documentation', href: '/dashboard/docs', icon: Book },
+    ...(isAdmin ? [{ name: 'Admin Panel', href: '/dashboard/admin', icon: Shield }] : []),
   ];
 
-  const isActive = (href: string) => pathname === href;
+  const isActive = (href: string) => pathname === href || pathname?.startsWith(href + '/');
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-900 to-gray-800">
