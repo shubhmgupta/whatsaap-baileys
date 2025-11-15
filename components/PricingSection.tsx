@@ -35,14 +35,6 @@ export function PricingSection() {
     fetch('/api/pricing')
       .then((res) => res.json())
       .then((data) => {
-        console.log('=== HOMEPAGE PRICING DATA ===');
-        console.log('Raw data:', data);
-        data.forEach((plan: Plan) => {
-          console.log(`Plan: ${plan.name}`);
-          console.log(`  Price value: ${plan.price}`);
-          console.log(`  Price type: ${typeof plan.price}`);
-          console.log(`  Raw JSON: ${JSON.stringify(plan)}`);
-        });
         setPlans(data);
         setLoading(false);
       })
@@ -77,8 +69,8 @@ export function PricingSection() {
           const Icon = iconMap[index % 3] || Zap;
           const color = colorMap[index % 3] || 'blue';
           const isPopular = plan.discountLabel && plan.discountLabel.toLowerCase().includes('popular');
-          const originalPrice = plan.discountPercentage && plan.discountPercentage > 0
-            ? Math.round(plan.price * 100 / (100 - plan.discountPercentage))
+          const discountedPrice = plan.discountPercentage && plan.discountPercentage > 0
+            ? Math.round(plan.price - (plan.price * plan.discountPercentage / 100))
             : null;
 
           return (
@@ -107,19 +99,19 @@ export function PricingSection() {
               </div>
               <h3 className="text-2xl font-bold mb-2">{plan.name}</h3>
               <div className="mb-4">
-                {originalPrice && (
-                  <div className="text-2xl text-gray-500 line-through mb-1">
-                    ₹{originalPrice}
-                  </div>
-                )}
                 <div className="text-4xl font-bold flex items-baseline gap-2">
                   ₹{plan.price}
                   {plan.discountPercentage && plan.discountPercentage > 0 && (
                     <span className="text-lg text-yellow-400 font-semibold">
-                      Save {plan.discountPercentage}%
+                      Original Price
                     </span>
                   )}
                 </div>
+                {discountedPrice !== null && (
+                  <div className="text-2xl text-green-400 font-bold mt-1">
+                    Sale Price: ₹{discountedPrice} (Save {plan.discountPercentage}%)
+                  </div>
+                )}
               </div>
               <p className="text-gray-400 mb-6">{plan.credits.toLocaleString()} Credits</p>
               <ul className="space-y-3 mb-8">

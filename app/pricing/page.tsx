@@ -28,19 +28,29 @@ const colorMap: Record<number, string> = {
 };
 
 export default function PricingPage() {
+  console.log('PricingPage component rendered');
+  
   const [user, setUser] = useState<any>(null);
   const [pricingPlans, setPricingPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const userData = sessionStorage.getItem('user');
-    if (userData) {
-      setUser(JSON.parse(userData));
+    console.log('useEffect running');
+    
+    if (typeof window !== 'undefined') {
+      const userData = sessionStorage.getItem('user');
+      if (userData) {
+        setUser(JSON.parse(userData));
+      }
     }
 
     // Fetch plans from API
+    console.log('Fetching from /api/pricing');
     fetch('/api/pricing')
-      .then((res) => res.json())
+      .then((res) => {
+        console.log('Response received:', res.status);
+        return res.json();
+      })
       .then((data) => {
         console.log('=== PRICING PAGE DATA ===');
         console.log('Full data:', JSON.stringify(data, null, 2));
@@ -128,7 +138,6 @@ export default function PricingPage() {
                     <div className="mb-6">
                       <span className="text-5xl font-bold text-white">₹{plan.price}</span>
                       <span className="text-gray-400 ml-2">one-time</span>
-                      <div className="text-xs text-red-500 mt-1">DEBUG: Raw value = {plan.price} (type: {typeof plan.price})</div>
                       {plan.discountPercentage && plan.discountPercentage > 0 && (
                         <div className="text-yellow-400 text-sm font-semibold mt-1">
                           Save {plan.discountPercentage}%
