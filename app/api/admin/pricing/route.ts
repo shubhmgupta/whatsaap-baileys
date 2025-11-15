@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { name, price, credits, active } = body;
+    const { name, price, credits, features, discountPercentage, discountLabel, active } = body;
 
     if (!name || price === undefined || credits === undefined) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -70,6 +70,9 @@ export async function POST(request: NextRequest) {
         name,
         price: parseFloat(price),
         credits: parseInt(credits),
+        features: features || null,
+        discountPercentage: discountPercentage ? parseInt(discountPercentage) : 0,
+        discountLabel: discountLabel || null,
         active: active !== undefined ? active : true,
       })
       .returning();

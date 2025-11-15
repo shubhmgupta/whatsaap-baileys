@@ -15,6 +15,20 @@
       "when": 1763124705274,
       "tag": "0001_eminent_thunderbolts",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1763175338724,
+      "tag": "0002_broad_xorn",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1763175633843,
+      "tag": "0003_magenta_shotgun",
+      "breakpoints": true
     }
   ]
 }

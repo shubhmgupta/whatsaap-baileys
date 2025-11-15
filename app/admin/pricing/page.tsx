@@ -8,6 +8,9 @@ interface Plan {
   name: string;
   price: number;
   credits: number;
+  features?: string;
+  discountPercentage?: number;
+  discountLabel?: string;
   active: boolean;
 }
 
@@ -20,6 +23,9 @@ export default function AdminPricingPage() {
     name: '',
     price: '',
     credits: '',
+    features: '',
+    discountPercentage: '',
+    discountLabel: '',
     active: true,
   });
 
@@ -37,7 +43,12 @@ export default function AdminPricingPage() {
       if (response.ok) {
         const data = await response.json();
         console.log('Plans loaded:', data);
-        setPlans(data);
+        // Convert paise to rupees (database stores in paise)
+        const plansWithRupees = data.map((plan: Plan) => ({
+          ...plan,
+          price: Math.round(plan.price / 100)
+        }));
+        setPlans(plansWithRupees);
       } else {
         const error = await response.json();
         console.error('Failed to load plans:', error);
@@ -67,8 +78,11 @@ export default function AdminPricingPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: formData.name,
-          price: parseFloat(formData.price),
+          price: parseInt(formData.price) * 100, // Convert rupees to paise for storage
           credits: parseInt(formData.credits),
+          features: formData.features || null,
+          discountPercentage: formData.discountPercentage ? parseInt(formData.discountPercentage) : 0,
+          discountLabel: formData.discountLabel || null,
           active: formData.active,
         }),
       });
@@ -135,6 +149,9 @@ export default function AdminPricingPage() {
       name: plan.name,
       price: plan.price.toString(),
       credits: plan.credits.toString(),
+      features: plan.features || '',
+      discountPercentage: plan.discountPercentage?.toString() || '',
+      discountLabel: plan.discountLabel || '',
       active: plan.active,
     });
     setShowModal(true);
@@ -146,6 +163,9 @@ export default function AdminPricingPage() {
       name: '',
       price: '',
       credits: '',
+      features: '',
+      discountPercentage: '',
+      discountLabel: '',
       active: true,
     });
   };
@@ -193,6 +213,9 @@ export default function AdminPricingPage() {
                 Credits
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                Discount
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                 Status
               </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
@@ -214,10 +237,22 @@ export default function AdminPricingPage() {
                     <div className="font-medium text-white">{plan.name}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-green-400 font-semibold">${plan.price}</div>
+                    <div className="text-green-400 font-semibold">₹{plan.price}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-blue-400 font-semibold">{plan.credits.toLocaleString()} credits</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {plan.discountPercentage && plan.discountPercentage > 0 ? (
+                      <div>
+                        <div className="text-yellow-400 font-semibold">{plan.discountPercentage}% OFF</div>
+                        {plan.discountLabel && (
+                          <div className="text-xs text-gray-400 mt-0.5">{plan.discountLabel}</div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-gray-500 text-sm">-</div>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <button
@@ -286,15 +321,15 @@ export default function AdminPricingPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Price ($)
+                  Price (₹)
                 </label>
                 <input
                   type="number"
-                  step="0.01"
+                  step="1"
                   value={formData.price}
                   onChange={(e) => setFormData({ ...formData, price: e.target.value })}
                   className="w-full px-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="10.00"
+                  placeholder="999"
                   required
                 />
               </div>
@@ -311,6 +346,49 @@ export default function AdminPricingPage() {
                   placeholder="100"
                   required
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Features / Bullet Points
+                </label>
+                <textarea
+                  value={formData.features}
+                  onChange={(e) => setFormData({ ...formData, features: e.target.value })}
+                  className="w-full px-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Enter one feature per line, e.g.:&#10;Full API access&#10;Priority support&#10;Advanced analytics"
+                  rows={4}
+                />
+                <p className="text-xs text-gray-400 mt-1">Enter one feature per line</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Discount %
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={formData.discountPercentage}
+                    onChange={(e) => setFormData({ ...formData, discountPercentage: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Discount Label
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.discountLabel}
+                    onChange={(e) => setFormData({ ...formData, discountLabel: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Most Popular"
+                  />
+                </div>
               </div>
 
               <div className="flex items-center">

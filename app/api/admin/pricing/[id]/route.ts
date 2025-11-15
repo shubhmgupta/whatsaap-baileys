@@ -45,7 +45,7 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { name, price, credits, active } = body;
+    const { name, price, credits, features, discountPercentage, discountLabel, active } = body;
 
     const [updatedPlan] = await db
       .update(plans)
@@ -53,6 +53,9 @@ export async function PUT(
         name,
         price: parseFloat(price),
         credits: parseInt(credits),
+        features: features || null,
+        discountPercentage: discountPercentage ? parseInt(discountPercentage) : 0,
+        discountLabel: discountLabel || null,
         active,
       })
       .where(eq(plans.id, parseInt(id)))

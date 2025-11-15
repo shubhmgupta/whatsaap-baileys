@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { MessageSquare, Zap, Shield, Code, CheckCircle2, ArrowRight } from 'lucide-react';
+import { PricingSection } from '@/components/PricingSection';
 
 export default function Home() {
   return (
@@ -113,13 +114,16 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Pricing Section */}
+      <PricingSection />
+
       {/* API Preview */}
       <section id="api" className="container mx-auto px-4 py-20">
         <div className="text-center mb-16">
           <h2 className="text-4xl md:text-5xl font-bold mb-4">Simple, Powerful API</h2>
           <p className="text-xl text-gray-400">Send your first message in minutes</p>
         </div>
-        <div className="max-w-3xl mx-auto bg-gray-800 rounded-lg p-6 border border-gray-700">
+        <div className="max-w-3xl mx-auto bg-gray-800 rounded-lg p-6 border border-gray-700 mb-8">
           <pre className="text-sm text-green-400 overflow-x-auto">
             <code>{`curl -X POST https://yourapi.com/api/message/send \
   -H "Authorization: Bearer YOUR_API_TOKEN" \
@@ -129,6 +133,12 @@ export default function Home() {
     "message": "Hello from WhatsApp SaaS!"
   }'`}</code>
           </pre>
+        </div>
+        <div className="text-center">
+          <Link href="/docs" className="inline-flex items-center gap-2 bg-gradient-to-r from-green-500 to-blue-600 hover:from-green-600 hover:to-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition">
+            View Full Documentation
+            <ArrowRight className="w-5 h-5" />
+          </Link>
         </div>
       </section>
 

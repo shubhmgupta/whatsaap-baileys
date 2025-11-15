@@ -8,6 +8,9 @@ export const plans = pgTable('plans', {
     name: text('name').notNull(),
     price: integer('price').notNull(),
     credits: integer('credits').notNull(),
+    features: text('features'), // JSON string array of features/bullet points
+    discountPercentage: integer('discount_percentage').default(0),
+    discountLabel: text('discount_label'),
     active: boolean('active').default(true),
 });
 
