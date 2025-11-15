@@ -279,6 +279,16 @@ async function createBaileysSession(userId: string) {
                             message.message.videoMessage?.caption ||
                             '';
 
+          // Try to get contact name from WhatsApp
+          let contactName = senderNumber;
+          try {
+            const pushName = message.pushName || null;
+            const verifiedName = message.verifiedBizName || null;
+            contactName = verifiedName || pushName || senderNumber;
+          } catch (error) {
+            console.error('Error getting contact name:', error);
+          }
+
           // Get or create contact
           let contact = await db.query.contacts.findFirst({
             where: and(
@@ -291,13 +301,17 @@ async function createBaileysSession(userId: string) {
             const [newContact] = await db.insert(contacts).values({
               userId: parseInt(userId),
               phoneNumber: senderNumber,
-              name: senderNumber,
+              name: contactName,
               lastMessageAt: new Date(),
             }).returning();
             contact = newContact;
           } else {
+            // Update contact name if we got a better one and last message time
             await db.update(contacts)
-              .set({ lastMessageAt: new Date() })
+              .set({ 
+                name: contactName !== senderNumber ? contactName : contact.name,
+                lastMessageAt: new Date() 
+              })
               .where(eq(contacts.id, contact.id));
           }
 

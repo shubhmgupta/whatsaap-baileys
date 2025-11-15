@@ -418,12 +418,20 @@ export default function Dashboard() {
                     </div>
                   )}
                   {connected && (
-                    <button
-                      onClick={loadIncomingMessages}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-sm font-semibold transition-colors"
-                    >
-                      Inbox
-                    </button>
+                    <>
+                      <Link
+                        href="/dashboard/inbox"
+                        className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded-lg text-sm font-semibold transition-colors"
+                      >
+                        Inbox
+                      </Link>
+                      <button
+                        onClick={loadIncomingMessages}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-sm font-semibold transition-colors"
+                      >
+                        All Messages
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
