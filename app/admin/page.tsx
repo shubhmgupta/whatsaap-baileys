@@ -35,14 +35,14 @@ export default function AdminDashboard() {
       title: 'Manage Pricing Plans',
       description: 'Create, edit, or delete pricing plans',
       icon: DollarSign,
-      href: '/dashboard/admin/pricing',
+      href: '/admin/pricing',
       color: 'from-green-500 to-emerald-600',
     },
     {
       title: 'Manage Users',
       description: 'View users and assign credits',
       icon: Users,
-      href: '/dashboard/admin/users',
+      href: '/admin/users',
       color: 'from-blue-500 to-cyan-600',
     },
   ];

@@ -36,7 +36,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: 'API Keys', href: '/dashboard/api-keys', icon: Key },
     { name: 'Contacts', href: '/dashboard/contacts', icon: Users },
     { name: 'Documentation', href: '/dashboard/docs', icon: Book },
-    ...(isAdmin ? [{ name: 'Admin Panel', href: '/dashboard/admin', icon: Shield }] : []),
+    ...(isAdmin ? [{ name: 'Admin Panel', href: '/admin', icon: Shield }] : []),
   ];
 
   const isActive = (href: string) => pathname === href || pathname?.startsWith(href + '/');
