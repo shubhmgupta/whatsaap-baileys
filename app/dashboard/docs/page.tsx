@@ -19,6 +19,7 @@ hljs.registerLanguage('bash', bash);
 hljs.registerLanguage('json', json);
 
 export default function DocsPage() {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [expandedSection, setExpandedSection] = useState<string | null>('auth-qr');
   const [activeLanguage, setActiveLanguage] = useState<{ [key: string]: string }>({});
@@ -174,7 +175,7 @@ export default function DocsPage() {
             <div>
               <h2 className="text-xl font-bold mb-2">v1 API Base URL</h2>
               <code className="bg-gray-900 px-4 py-2 rounded block text-green-400">
-                http://localhost:3000/api/v1
+                ${baseUrl}/api/v1
               </code>
               <p className="text-gray-400 mt-3 text-sm">
                 All v1 API requests use <strong className="text-purple-400">Bearer token authentication</strong>. 
@@ -238,14 +239,14 @@ export default function DocsPage() {
                     {
                       lang: 'bash',
                       label: 'cURL',
-                      code: `curl -X POST http://localhost:3000/api/v1/auth/qr \\
+                      code: `curl -X POST ${baseUrl}/api/v1/auth/qr \\
   -H "Authorization: Bearer YOUR_API_TOKEN"`
                     },
                     {
                       lang: 'javascript',
                       label: 'JavaScript',
                       code: `// Using Fetch API
-const response = await fetch('http://localhost:3000/api/v1/auth/qr', {
+const response = await fetch('${baseUrl}/api/v1/auth/qr', {
   method: 'POST',
   headers: {
     'Authorization': 'Bearer YOUR_API_TOKEN'
@@ -258,7 +259,7 @@ console.log(data);
 // Using Axios
 const axios = require('axios');
 
-const response = await axios.post('http://localhost:3000/api/v1/auth/qr', {}, {
+const response = await axios.post('${baseUrl}/api/v1/auth/qr', {}, {
   headers: {
     'Authorization': 'Bearer YOUR_API_TOKEN'
   }
@@ -271,7 +272,7 @@ console.log(response.data);`
                       label: 'Python',
                       code: `import requests
 
-url = "http://localhost:3000/api/v1/auth/qr"
+url = "${baseUrl}/api/v1/auth/qr"
 headers = {
     "Authorization": "Bearer YOUR_API_TOKEN"
 }
@@ -285,7 +286,7 @@ print(data)`
                       label: 'PHP',
                       code: `<?php
 
-$url = "http://localhost:3000/api/v1/auth/qr";
+$url = "${baseUrl}/api/v1/auth/qr";
 $token = "YOUR_API_TOKEN";
 
 $ch = curl_init($url);
@@ -483,14 +484,14 @@ print_r($data);
                     {
                       lang: 'bash',
                       label: 'cURL',
-                      code: `curl -X GET http://localhost:3000/api/v1/auth/status \\
+                      code: `curl -X GET ${baseUrl}/api/v1/auth/status \\
   -H "Authorization: Bearer YOUR_API_TOKEN"`
                     },
                     {
                       lang: 'javascript',
                       label: 'JavaScript',
                       code: `// Using Fetch API
-const response = await fetch('http://localhost:3000/api/v1/auth/status', {
+const response = await fetch('${baseUrl}/api/v1/auth/status', {
   method: 'GET',
   headers: {
     'Authorization': 'Bearer YOUR_API_TOKEN'
@@ -503,7 +504,7 @@ console.log('Connected:', status.connected);
 // Polling example (check every 3 seconds)
 const pollStatus = async () => {
   const interval = setInterval(async () => {
-    const response = await fetch('http://localhost:3000/api/v1/auth/status', {
+    const response = await fetch('${baseUrl}/api/v1/auth/status', {
       headers: { 'Authorization': 'Bearer YOUR_API_TOKEN' }
     });
     const data = await response.json();
@@ -521,7 +522,7 @@ const pollStatus = async () => {
                       code: `import requests
 import time
 
-url = "http://localhost:3000/api/v1/auth/status"
+url = "${baseUrl}/api/v1/auth/status"
 headers = {"Authorization": "Bearer YOUR_API_TOKEN"}
 
 response = requests.get(url, headers=headers)
@@ -547,7 +548,7 @@ poll_status()`
                       label: 'PHP',
                       code: `<?php
 
-$url = "http://localhost:3000/api/v1/auth/status";
+$url = "${baseUrl}/api/v1/auth/status";
 $token = "YOUR_API_TOKEN";
 
 $ch = curl_init($url);
@@ -673,7 +674,7 @@ function pollStatus($url, $token) {
                 <h4 className="font-semibold mb-2">🔧 cURL Example</h4>
                 <CodeBlock
                   id="v1-restore-curl"
-                  code={`curl -X POST http://localhost:3000/api/v1/auth/restore \\
+                  code={`curl -X POST ${baseUrl}/api/v1/auth/restore \\
   -H "Authorization: Bearer YOUR_API_TOKEN"`}
                 />
               </div>
@@ -728,7 +729,7 @@ function pollStatus($url, $token) {
                 <h4 className="font-semibold mb-2">🔧 cURL Example</h4>
                 <CodeBlock
                   id="v1-logout-curl"
-                  code={`curl -X POST http://localhost:3000/api/v1/auth/disconnect \\
+                  code={`curl -X POST ${baseUrl}/api/v1/auth/disconnect \\
   -H "Authorization: Bearer YOUR_API_TOKEN"`}
                 />
               </div>
@@ -768,7 +769,7 @@ function pollStatus($url, $token) {
                 <h4 className="font-semibold mb-2">🔧 cURL Example</h4>
                 <CodeBlock
                   id="v1-restart-curl"
-                  code={`curl -X POST http://localhost:3000/api/v1/auth/restart \\
+                  code={`curl -X POST ${baseUrl}/api/v1/auth/restart \\
   -H "Authorization: Bearer YOUR_API_TOKEN"`}
                 />
               </div>
@@ -825,7 +826,7 @@ function pollStatus($url, $token) {
                     {
                       lang: 'bash',
                       label: 'cURL',
-                      code: `curl -X POST http://localhost:3000/api/v1/message/send \\
+                      code: `curl -X POST ${baseUrl}/api/v1/message/send \\
   -H "Authorization: Bearer YOUR_API_TOKEN" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -837,7 +838,7 @@ function pollStatus($url, $token) {
                       lang: 'javascript',
                       label: 'JavaScript',
                       code: `// Using Fetch API
-const response = await fetch('http://localhost:3000/api/v1/message/send', {
+const response = await fetch('${baseUrl}/api/v1/message/send', {
   method: 'POST',
   headers: {
     'Authorization': 'Bearer YOUR_API_TOKEN',
@@ -855,7 +856,7 @@ console.log('Remaining credits:', result.remainingCredits);
 // Using Axios
 const axios = require('axios');
 
-const response = await axios.post('http://localhost:3000/api/v1/message/send', {
+const response = await axios.post('${baseUrl}/api/v1/message/send', {
   phoneNumber: '919876543210',
   message: 'Hello from v1 API!'
 }, {
@@ -871,7 +872,7 @@ console.log(response.data);`
                       label: 'Python',
                       code: `import requests
 
-url = "http://localhost:3000/api/v1/message/send"
+url = "${baseUrl}/api/v1/message/send"
 headers = {
     "Authorization": "Bearer YOUR_API_TOKEN",
     "Content-Type": "application/json"
@@ -890,7 +891,7 @@ print(f"Remaining credits: {result['remainingCredits']}")`
                       label: 'PHP',
                       code: `<?php
 
-$url = "http://localhost:3000/api/v1/message/send";
+$url = "${baseUrl}/api/v1/message/send";
 $token = "YOUR_API_TOKEN";
 
 $data = [
@@ -929,21 +930,21 @@ echo "Remaining credits: " . $result['remainingCredits'];
                       lang: 'bash',
                       label: 'cURL',
                       code: `# Send Image
-curl -X POST http://localhost:3000/api/v1/message/send \\
+curl -X POST ${baseUrl}/api/v1/message/send \\
   -H "Authorization: Bearer YOUR_API_TOKEN" \\
   -F "phoneNumber=919876543210" \\
   -F "message=Check this out!" \\
   -F "file=@image.jpg"
 
 # Send PDF Document
-curl -X POST http://localhost:3000/api/v1/message/send \\
+curl -X POST ${baseUrl}/api/v1/message/send \\
   -H "Authorization: Bearer YOUR_API_TOKEN" \\
   -F "phoneNumber=919876543210" \\
   -F "message=Here's your document" \\
   -F "file=@document.pdf"
 
 # Send Video
-curl -X POST http://localhost:3000/api/v1/message/send \\
+curl -X POST ${baseUrl}/api/v1/message/send \\
   -H "Authorization: Bearer YOUR_API_TOKEN" \\
   -F "phoneNumber=919876543210" \\
   -F "file=@video.mp4"`
@@ -961,7 +962,7 @@ formData.append('message', 'Check this out!');
 formData.append('file', fs.createReadStream('image.jpg')); // Node.js
 // OR in browser: formData.append('file', fileInput.files[0]);
 
-const response = await fetch('http://localhost:3000/api/v1/message/send', {
+const response = await fetch('${baseUrl}/api/v1/message/send', {
   method: 'POST',
   headers: {
     'Authorization': 'Bearer YOUR_API_TOKEN'
@@ -983,7 +984,7 @@ form.append('message', 'Check this out!');
 form.append('file', fs.createReadStream('image.jpg'));
 
 const response = await axios.post(
-  'http://localhost:3000/api/v1/message/send',
+  '${baseUrl}/api/v1/message/send',
   form,
   {
     headers: {
@@ -998,7 +999,7 @@ const response = await axios.post(
                       label: 'Python',
                       code: `import requests
 
-url = "http://localhost:3000/api/v1/message/send"
+url = "${baseUrl}/api/v1/message/send"
 headers = {"Authorization": "Bearer YOUR_API_TOKEN"}
 
 # Send image
@@ -1028,7 +1029,7 @@ with open('document.pdf', 'rb') as file:
                       label: 'PHP',
                       code: `<?php
 
-$url = "http://localhost:3000/api/v1/message/send";
+$url = "${baseUrl}/api/v1/message/send";
 $token = "YOUR_API_TOKEN";
 
 // Send image with CURLFile
@@ -1184,7 +1185,7 @@ print_r($result);
                 <h4 className="font-semibold mb-2">🔧 cURL Example</h4>
                 <CodeBlock
                   id="v1-incoming-curl"
-                  code={`curl -X GET http://localhost:3000/api/v1/messages/incoming \\
+                  code={`curl -X GET ${baseUrl}/api/v1/messages/incoming \\
   -H "Authorization: Bearer YOUR_API_TOKEN"`}
                 />
               </div>
@@ -1233,7 +1234,7 @@ print_r($result);
                 <h4 className="font-semibold mb-2">🔧 cURL Example</h4>
                 <CodeBlock
                   id="v1-contacts-curl"
-                  code={`curl -X GET http://localhost:3000/api/v1/contacts \\
+                  code={`curl -X GET ${baseUrl}/api/v1/contacts \\
   -H "Authorization: Bearer YOUR_API_TOKEN"`}
                 />
               </div>
