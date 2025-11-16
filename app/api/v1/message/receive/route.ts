@@ -3,6 +3,16 @@ import { getUserFromToken } from '@/lib/api-auth';
 import { db } from '@/lib/db';
 import { messages } from '@/db/schema';
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
+export async function OPTIONS() {
+  return NextResponse.json({}, { headers: corsHeaders });
+}
+
 export async function POST(request: Request) {
   try {
     // Get API token from Authorization header
@@ -11,7 +21,7 @@ export async function POST(request: Request) {
     if (!token) {
       return NextResponse.json({ 
         error: 'Authorization token required. Format: Bearer YOUR_API_TOKEN' 
-      }, { status: 401 });
+      }, { status: 401, headers: corsHeaders });
     }
 
     // Get user from API token
@@ -20,7 +30,7 @@ export async function POST(request: Request) {
     if (!user) {
       return NextResponse.json({ 
         error: 'Invalid API token' 
-      }, { status: 401 });
+      }, { status: 401, headers: corsHeaders });
     }
 
     const userId = user.id;
@@ -34,7 +44,7 @@ export async function POST(request: Request) {
     if (!from || !message) {
       return NextResponse.json({ 
         error: 'Missing required fields: from, message' 
-      }, { status: 400 });
+      }, { status: 400, headers: corsHeaders });
     }
 
     // Store incoming message in database
@@ -46,12 +56,12 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ 
       message: 'Webhook received and stored successfully' 
-    });
+    }, { headers: corsHeaders });
 
   } catch (error) {
     console.error('Error processing webhook:', error);
     return NextResponse.json({ 
       error: 'Failed to process webhook' 
-    }, { status: 500 });
+    }, { status: 500, headers: corsHeaders });
   }
 }

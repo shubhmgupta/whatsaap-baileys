@@ -2,6 +2,16 @@ import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/baileys';
 import { getUserFromToken } from '@/lib/api-auth';
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
+export async function OPTIONS() {
+  return NextResponse.json({}, { headers: corsHeaders });
+}
+
 export async function POST(request: Request) {
   try {
     // Get API token from Authorization header
@@ -10,7 +20,7 @@ export async function POST(request: Request) {
     if (!token) {
       return NextResponse.json({ 
         error: 'Authorization token required. Format: Bearer YOUR_API_TOKEN' 
-      }, { status: 401 });
+      }, { status: 401, headers: corsHeaders });
     }
 
     // Get user from API token
@@ -19,7 +29,7 @@ export async function POST(request: Request) {
     if (!user) {
       return NextResponse.json({ 
         error: 'Invalid API token' 
-      }, { status: 401 });
+      }, { status: 401, headers: corsHeaders });
     }
 
     const userId = user.id;
@@ -34,7 +44,7 @@ export async function POST(request: Request) {
           id: existingSession.sock.user.id,
           name: existingSession.sock.user.name
         }
-      }, { status: 400 });
+      }, { status: 400, headers: corsHeaders });
     }
 
     // Check if currently connecting
@@ -45,13 +55,13 @@ export async function POST(request: Request) {
           qr: existingSession.qr,
           status: 'qr_generated',
           message: 'Scan QR code to connect'
-        });
+        }, { headers: corsHeaders });
       }
       
       return NextResponse.json({ 
         status: 'connecting',
         message: 'Connection in progress. Please wait...'
-      });
+      }, { headers: corsHeaders });
     }
 
     // Try to restore from database first (no QR generation)
@@ -72,7 +82,7 @@ export async function POST(request: Request) {
           id: checkSession.sock.user.id,
           name: checkSession.sock.user.name
         }
-      });
+      }, { headers: corsHeaders });
     }
 
     // If not restored, generate new QR code
@@ -82,7 +92,7 @@ export async function POST(request: Request) {
     if (!session) {
       return NextResponse.json({ 
         error: 'Failed to initialize WhatsApp session' 
-      }, { status: 500 });
+      }, { status: 500, headers: corsHeaders });
     }
 
     // Wait for QR code to be generated
@@ -97,7 +107,7 @@ export async function POST(request: Request) {
           qr: currentSession.qr,
           status: 'qr_generated',
           message: 'Scan QR code to connect'
-        });
+        }, { headers: corsHeaders });
       }
       
       if (currentSession?.connected && currentSession?.sock?.user) {
@@ -109,7 +119,7 @@ export async function POST(request: Request) {
             id: currentSession.sock.user.id,
             name: currentSession.sock.user.name
           }
-        });
+        }, { headers: corsHeaders });
       }
       
       await new Promise(resolve => setTimeout(resolve, 500));
@@ -117,13 +127,13 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ 
       error: 'QR code generation timeout. Please try again.' 
-    }, { status: 408 });
+    }, { status: 408, headers: corsHeaders });
 
   } catch (error) {
     console.error('Error generating QR code:', error);
     return NextResponse.json({ 
       error: 'Failed to generate QR code',
       details: error instanceof Error ? error.message : String(error)
-    }, { status: 500 });
+    }, { status: 500, headers: corsHeaders });
   }
 }

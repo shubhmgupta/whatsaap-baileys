@@ -1,12 +1,27 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Book, Copy, Check, ChevronDown, ChevronUp, Terminal, Code2, Zap } from 'lucide-react';
+import hljs from 'highlight.js/lib/core';
+import javascript from 'highlight.js/lib/languages/javascript';
+import python from 'highlight.js/lib/languages/python';
+import php from 'highlight.js/lib/languages/php';
+import bash from 'highlight.js/lib/languages/bash';
+import json from 'highlight.js/lib/languages/json';
+import 'highlight.js/styles/github-dark.css';
+
+// Register languages
+hljs.registerLanguage('javascript', javascript);
+hljs.registerLanguage('python', python);
+hljs.registerLanguage('php', php);
+hljs.registerLanguage('bash', bash);
+hljs.registerLanguage('json', json);
 
 export default function DocsPage() {
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [expandedSection, setExpandedSection] = useState<string | null>('auth-qr');
+  const [activeLanguage, setActiveLanguage] = useState<{ [key: string]: string }>({});
 
   const copyToClipboard = async (text: string, id: string) => {
     try {
@@ -22,22 +37,85 @@ export default function DocsPage() {
     setExpandedSection(expandedSection === id ? null : id);
   };
 
-  const CodeBlock = ({ code, id, language = 'bash' }: { code: string; id: string; language?: string }) => (
-    <div className="relative">
-      <div className="flex items-center justify-between bg-gray-900 px-4 py-2 rounded-t">
-        <span className="text-xs text-gray-400 uppercase">{language}</span>
-        <button
-          onClick={() => copyToClipboard(code, id)}
-          className="text-gray-400 hover:text-white transition"
-        >
-          {copiedCode === id ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
-        </button>
+  useEffect(() => {
+    // Highlight all code blocks on mount and when expanded section changes
+    hljs.highlightAll();
+  }, [expandedSection]);
+
+  const CodeBlock = ({ code, id, language = 'bash' }: { code: string; id: string; language?: string }) => {
+    const highlightedCode = hljs.highlight(code, { language }).value;
+    
+    return (
+      <div className="relative">
+        <div className="flex items-center justify-between bg-gray-900 px-4 py-2 rounded-t">
+          <span className="text-xs text-gray-400 uppercase">{language}</span>
+          <button
+            onClick={() => copyToClipboard(code, id)}
+            className="text-gray-400 hover:text-white transition"
+          >
+            {copiedCode === id ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+          </button>
+        </div>
+        <pre className="bg-gray-950 p-4 rounded-b overflow-x-auto">
+          <code 
+            className={`language-${language} text-sm`}
+            dangerouslySetInnerHTML={{ __html: highlightedCode }}
+          />
+        </pre>
       </div>
-      <pre className="bg-gray-950 p-4 rounded-b overflow-x-auto">
-        <code className="text-sm text-green-400">{code}</code>
-      </pre>
-    </div>
-  );
+    );
+  };
+
+  const MultiLanguageCodeBlock = ({ 
+    examples, 
+    id 
+  }: { 
+    examples: { lang: string; code: string; label: string }[]; 
+    id: string;
+  }) => {
+    const [activeLang, setActiveLang] = useState(examples[0].lang);
+    const activeExample = examples.find(ex => ex.lang === activeLang) || examples[0];
+
+    return (
+      <div className="relative">
+        <div className="flex items-center justify-between bg-gray-900 px-4 py-2 rounded-t">
+          <div className="flex gap-2">
+            {examples.map(ex => (
+              <button
+                key={ex.lang}
+                onClick={() => setActiveLang(ex.lang)}
+                className={`px-3 py-1 text-xs font-semibold rounded transition ${
+                  activeLang === ex.lang 
+                    ? 'bg-blue-600 text-white' 
+                    : 'bg-gray-800 text-gray-400 hover:text-white'
+                }`}
+              >
+                {ex.label}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => copyToClipboard(activeExample.code, `${id}-${activeLang}`)}
+            className="text-gray-400 hover:text-white transition"
+          >
+            {copiedCode === `${id}-${activeLang}` ? (
+              <Check className="w-4 h-4 text-green-400" />
+            ) : (
+              <Copy className="w-4 h-4" />
+            )}
+          </button>
+        </div>
+        <pre className="bg-gray-950 p-4 rounded-b overflow-x-auto">
+          <code 
+            className={`language-${activeExample.lang} text-sm`}
+            dangerouslySetInnerHTML={{ 
+              __html: hljs.highlight(activeExample.code, { language: activeExample.lang }).value 
+            }}
+          />
+        </pre>
+      </div>
+    );
+  };
 
   const Section = ({ id, title, method, endpoint, description, children }: any) => {
     const isExpanded = expandedSection === id;
@@ -147,68 +225,242 @@ export default function DocsPage() {
                 <CodeBlock
                   id="v1-auth-header"
                   code={`Authorization: Bearer YOUR_API_TOKEN`}
-                  language="http"
+                  language="bash"
                 />
               </div>
 
               <div>
-                <h4 className="font-semibold mb-2">🔧 cURL Example</h4>
-                <CodeBlock
-                  id="v1-qr-curl"
-                  code={`curl -X POST http://localhost:3000/api/v1/auth/qr \\
-  -H "Authorization: Bearer YOUR_API_TOKEN"`}
+                <h4 className="font-semibold mb-2 text-xl">📝 Code Examples</h4>
+                <p className="text-sm text-gray-400 mb-3">Make a POST request to generate QR code</p>
+                <MultiLanguageCodeBlock
+                  id="v1-qr-examples"
+                  examples={[
+                    {
+                      lang: 'bash',
+                      label: 'cURL',
+                      code: `curl -X POST http://localhost:3000/api/v1/auth/qr \\
+  -H "Authorization: Bearer YOUR_API_TOKEN"`
+                    },
+                    {
+                      lang: 'javascript',
+                      label: 'JavaScript',
+                      code: `// Using Fetch API
+const response = await fetch('http://localhost:3000/api/v1/auth/qr', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_TOKEN'
+  }
+});
+
+const data = await response.json();
+console.log(data);
+
+// Using Axios
+const axios = require('axios');
+
+const response = await axios.post('http://localhost:3000/api/v1/auth/qr', {}, {
+  headers: {
+    'Authorization': 'Bearer YOUR_API_TOKEN'
+  }
+});
+
+console.log(response.data);`
+                    },
+                    {
+                      lang: 'python',
+                      label: 'Python',
+                      code: `import requests
+
+url = "http://localhost:3000/api/v1/auth/qr"
+headers = {
+    "Authorization": "Bearer YOUR_API_TOKEN"
+}
+
+response = requests.post(url, headers=headers)
+data = response.json()
+print(data)`
+                    },
+                    {
+                      lang: 'php',
+                      label: 'PHP',
+                      code: `<?php
+
+$url = "http://localhost:3000/api/v1/auth/qr";
+$token = "YOUR_API_TOKEN";
+
+$ch = curl_init($url);
+curl_setopt($ch, CURLOPT_POST, true);
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+curl_setopt($ch, CURLOPT_HTTPHEADER, [
+    "Authorization: Bearer " . $token
+]);
+
+$response = curl_exec($ch);
+curl_close($ch);
+
+$data = json_decode($response, true);
+print_r($data);
+
+?>`
+                    }
+                  ]}
                 />
               </div>
 
               <div>
-                <h4 className="font-semibold mb-2">✅ Success Response (QR Generated)</h4>
-                <CodeBlock
-                  id="v1-qr-response"
-                  code={`{
-  "qr": "2@xxx...",
+                <h4 className="font-semibold mb-2 text-lg">📊 Response Cases</h4>
+                <div className="space-y-4">
+                  {/* Case 1: QR Generated */}
+                  <div className="border border-green-500/30 rounded-lg p-4 bg-green-500/5">
+                    <h5 className="font-semibold text-green-400 mb-2">✅ Case 1: QR Code Generated (First Time Connection)</h5>
+                    <p className="text-sm text-gray-400 mb-3">
+                      When user has never connected or session was cleared. Display QR code to user.
+                    </p>
+                    <CodeBlock
+                      id="v1-qr-response-case1"
+                      code={`{
+  "qr": "2@AbCdEfGh1234567890...",
   "status": "qr_generated",
   "message": "Scan QR code to connect"
 }`}
-                  language="json"
-                />
-              </div>
+                      language="json"
+                    />
+                  </div>
 
-              <div>
-                <h4 className="font-semibold mb-2">✅ Success Response (Auto-Restored)</h4>
-                <CodeBlock
-                  id="v1-qr-restored"
-                  code={`{
+                  {/* Case 2: Auto-Restored */}
+                  <div className="border border-blue-500/30 rounded-lg p-4 bg-blue-500/5">
+                    <h5 className="font-semibold text-blue-400 mb-2">✅ Case 2: Auto-Restored (Session Exists)</h5>
+                    <p className="text-sm text-gray-400 mb-3">
+                      When valid session backup exists in database. No QR scan needed!
+                    </p>
+                    <CodeBlock
+                      id="v1-qr-response-case2"
+                      code={`{
   "message": "Connected successfully using saved session",
   "status": "auto_connected",
   "connected": true,
   "user": "+919876543210"
 }`}
-                  language="json"
-                />
-                <p className="text-sm text-gray-400 mt-2">
-                  ℹ️ If you previously connected and a database backup exists, the session will auto-restore without needing a QR scan.
-                </p>
-              </div>
+                      language="json"
+                    />
+                  </div>
 
-              <div>
-                <h4 className="font-semibold mb-2">❌ Error Response (Invalid Token)</h4>
-                <CodeBlock
-                  id="v1-qr-error"
-                  code={`{
-  "error": "Invalid API token"
+                  {/* Case 3: Already Connected */}
+                  <div className="border border-purple-500/30 rounded-lg p-4 bg-purple-500/5">
+                    <h5 className="font-semibold text-purple-400 mb-2">✅ Case 3: Already Connected</h5>
+                    <p className="text-sm text-gray-400 mb-3">
+                      When WhatsApp is already connected and active. No action needed.
+                    </p>
+                    <CodeBlock
+                      id="v1-qr-response-case3"
+                      code={`{
+  "message": "Already connected",
+  "connected": true,
+  "user": "+919876543210"
 }`}
-                  language="json"
-                />
+                      language="json"
+                    />
+                  </div>
+
+                  {/* Case 4: Invalid Token */}
+                  <div className="border border-red-500/30 rounded-lg p-4 bg-red-500/5">
+                    <h5 className="font-semibold text-red-400 mb-2">❌ Case 4: Invalid API Token</h5>
+                    <p className="text-sm text-gray-400 mb-3">
+                      When Bearer token is missing, malformed, or doesn't exist in database.
+                    </p>
+                    <CodeBlock
+                      id="v1-qr-response-case4"
+                      code={`{
+  "error": "Invalid API token"
+}
+
+// HTTP Status: 401 Unauthorized`}
+                      language="json"
+                    />
+                  </div>
+
+                  {/* Case 5: Restore Failed */}
+                  <div className="border border-orange-500/30 rounded-lg p-4 bg-orange-500/5">
+                    <h5 className="font-semibold text-orange-400 mb-2">⚠️ Case 5: Restore Attempt Failed</h5>
+                    <p className="text-sm text-gray-400 mb-3">
+                      When session backup exists but restoration failed (corrupted/expired). Returns new QR code.
+                    </p>
+                    <CodeBlock
+                      id="v1-qr-response-case5"
+                      code={`{
+  "qr": "2@NewQrCodeString...",
+  "status": "qr_generated",
+  "message": "Scan QR code to connect",
+  "restoreAttempted": true,
+  "restoreFailed": true
+}`}
+                      language="json"
+                    />
+                  </div>
+
+                  {/* Case 6: Timeout */}
+                  <div className="border border-yellow-500/30 rounded-lg p-4 bg-yellow-500/5">
+                    <h5 className="font-semibold text-yellow-400 mb-2">⏱️ Case 6: QR Generation Timeout</h5>
+                    <p className="text-sm text-gray-400 mb-3">
+                      When QR code doesn't generate within 30 seconds. Retry the request.
+                    </p>
+                    <CodeBlock
+                      id="v1-qr-response-case6"
+                      code={`{
+  "error": "QR code generation timeout. Please try again."
+}
+
+// HTTP Status: 408 Request Timeout
+// Action: Retry the POST request`}
+                      language="json"
+                    />
+                  </div>
+
+                  {/* Case 7: Server Error */}
+                  <div className="border border-gray-500/30 rounded-lg p-4 bg-gray-500/5">
+                    <h5 className="font-semibold text-gray-400 mb-2">❌ Case 7: Server Error</h5>
+                    <p className="text-sm text-gray-400 mb-3">
+                      When unexpected error occurs (database connection, file system, etc.)
+                    </p>
+                    <CodeBlock
+                      id="v1-qr-response-case7"
+                      code={`{
+  "error": "Failed to generate QR code",
+  "details": "Database connection timeout"
+}
+
+// HTTP Status: 500 Internal Server Error`}
+                      language="json"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="bg-blue-500/10 border border-blue-500/30 rounded p-4">
-                <h4 className="font-semibold mb-2">📱 Next Steps:</h4>
+                <h4 className="font-semibold mb-2">📱 Integration Flow:</h4>
                 <ol className="list-decimal list-inside space-y-1 text-sm text-gray-400">
-                  <li>Display the QR code to the end user</li>
-                  <li>User opens WhatsApp → Settings → Linked Devices → Link a Device</li>
-                  <li>Scan the QR code with phone camera</li>
-                  <li>Poll <code className="text-blue-400">/api/v1/auth/status</code> every 2-3 seconds to check connection</li>
+                  <li>Call <code className="text-blue-400">POST /api/v1/auth/qr</code></li>
+                  <li>Check response status:
+                    <ul className="list-disc list-inside ml-6 mt-1">
+                      <li><code className="text-green-400">qr_generated</code>: Display QR code to user</li>
+                      <li><code className="text-blue-400">auto_connected</code>: Already connected, proceed</li>
+                      <li><code className="text-purple-400">connected: true</code>: Already active, proceed</li>
+                    </ul>
+                  </li>
+                  <li>If QR shown, poll <code className="text-blue-400">/api/v1/auth/status</code> every 2-3 seconds</li>
+                  <li>When <code className="text-green-400">connected: true</code>, stop polling</li>
+                  <li>Start sending messages!</li>
                 </ol>
+              </div>
+
+              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded p-4">
+                <h4 className="font-semibold mb-2">⚡ Pro Tips:</h4>
+                <ul className="list-disc list-inside space-y-1 text-sm text-gray-400">
+                  <li>QR codes expire after ~60 seconds. Generate new one if timeout occurs</li>
+                  <li>Auto-restore happens automatically - you don't need to call separate restore endpoint</li>
+                  <li>Session backups are created automatically on successful connection</li>
+                  <li>Display QR as image: <code className="text-blue-400">{'<img src="data:image/png;base64,{qr}" />'}</code></li>
+                </ul>
               </div>
             </div>
           </Section>
@@ -223,39 +475,177 @@ export default function DocsPage() {
           >
             <div className="space-y-6">
               <div>
-                <h4 className="font-semibold mb-2">🔧 cURL Example</h4>
-                <CodeBlock
-                  id="v1-status-curl"
-                  code={`curl -X GET http://localhost:3000/api/v1/auth/status \\
-  -H "Authorization: Bearer YOUR_API_TOKEN"`}
+                <h4 className="font-semibold mb-2 text-xl">📝 Code Examples</h4>
+                <p className="text-sm text-gray-400 mb-3">Check if WhatsApp is connected</p>
+                <MultiLanguageCodeBlock
+                  id="v1-status-examples"
+                  examples={[
+                    {
+                      lang: 'bash',
+                      label: 'cURL',
+                      code: `curl -X GET http://localhost:3000/api/v1/auth/status \\
+  -H "Authorization: Bearer YOUR_API_TOKEN"`
+                    },
+                    {
+                      lang: 'javascript',
+                      label: 'JavaScript',
+                      code: `// Using Fetch API
+const response = await fetch('http://localhost:3000/api/v1/auth/status', {
+  method: 'GET',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_TOKEN'
+  }
+});
+
+const status = await response.json();
+console.log('Connected:', status.connected);
+
+// Polling example (check every 3 seconds)
+const pollStatus = async () => {
+  const interval = setInterval(async () => {
+    const response = await fetch('http://localhost:3000/api/v1/auth/status', {
+      headers: { 'Authorization': 'Bearer YOUR_API_TOKEN' }
+    });
+    const data = await response.json();
+    
+    if (data.connected) {
+      console.log('WhatsApp connected!');
+      clearInterval(interval);
+    }
+  }, 3000);
+};`
+                    },
+                    {
+                      lang: 'python',
+                      label: 'Python',
+                      code: `import requests
+import time
+
+url = "http://localhost:3000/api/v1/auth/status"
+headers = {"Authorization": "Bearer YOUR_API_TOKEN"}
+
+response = requests.get(url, headers=headers)
+status = response.json()
+print(f"Connected: {status['connected']}")
+
+# Polling example
+def poll_status():
+    while True:
+        response = requests.get(url, headers=headers)
+        data = response.json()
+        
+        if data.get('connected'):
+            print("WhatsApp connected!")
+            break
+        
+        time.sleep(3)  # Wait 3 seconds
+        
+poll_status()`
+                    },
+                    {
+                      lang: 'php',
+                      label: 'PHP',
+                      code: `<?php
+
+$url = "http://localhost:3000/api/v1/auth/status";
+$token = "YOUR_API_TOKEN";
+
+$ch = curl_init($url);
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+curl_setopt($ch, CURLOPT_HTTPHEADER, [
+    "Authorization: Bearer " . $token
+]);
+
+$response = curl_exec($ch);
+curl_close($ch);
+
+$status = json_decode($response, true);
+echo "Connected: " . ($status['connected'] ? 'Yes' : 'No');
+
+// Polling example
+function pollStatus($url, $token) {
+    while (true) {
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            "Authorization: Bearer " . $token
+        ]);
+        
+        $response = curl_exec($ch);
+        curl_close($ch);
+        
+        $data = json_decode($response, true);
+        
+        if ($data['connected']) {
+            echo "WhatsApp connected!";
+            break;
+        }
+        
+        sleep(3); // Wait 3 seconds
+    }
+}
+
+?>`
+                    }
+                  ]}
                 />
               </div>
 
               <div>
-                <h4 className="font-semibold mb-2">✅ Response (Connected)</h4>
-                <CodeBlock
-                  id="v1-status-connected"
-                  code={`{
+                <h4 className="font-semibold mb-2 text-lg">📊 Response Cases</h4>
+                <div className="space-y-4">
+                  {/* Case 1: Connected */}
+                  <div className="border border-green-500/30 rounded-lg p-4 bg-green-500/5">
+                    <h5 className="font-semibold text-green-400 mb-2">✅ Case 1: Connected</h5>
+                    <p className="text-sm text-gray-400 mb-3">
+                      WhatsApp is connected and ready to send messages
+                    </p>
+                    <CodeBlock
+                      id="v1-status-connected"
+                      code={`{
   "connected": true,
   "user": "+919876543210",
   "status": "active",
   "socketExists": true
 }`}
-                  language="json"
-                />
-              </div>
+                      language="json"
+                    />
+                  </div>
 
-              <div>
-                <h4 className="font-semibold mb-2">⚠️ Response (Not Connected)</h4>
-                <CodeBlock
-                  id="v1-status-disconnected"
-                  code={`{
+                  {/* Case 2: Not Connected */}
+                  <div className="border border-red-500/30 rounded-lg p-4 bg-red-500/5">
+                    <h5 className="font-semibold text-red-400 mb-2">❌ Case 2: Not Connected</h5>
+                    <p className="text-sm text-gray-400 mb-3">
+                      WhatsApp is not connected. User needs to scan QR code.
+                    </p>
+                    <CodeBlock
+                      id="v1-status-disconnected"
+                      code={`{
   "connected": false,
   "user": null,
   "socketExists": false
 }`}
-                  language="json"
-                />
+                      language="json"
+                    />
+                  </div>
+
+                  {/* Case 3: Invalid Token */}
+                  <div className="border border-orange-500/30 rounded-lg p-4 bg-orange-500/5">
+                    <h5 className="font-semibold text-orange-400 mb-2">❌ Case 3: Invalid Token</h5>
+                    <p className="text-sm text-gray-400 mb-3">
+                      API token is invalid or expired
+                    </p>
+                    <CodeBlock
+                      id="v1-status-invalid"
+                      code={`{
+  "error": "Invalid API token"
+}
+
+// HTTP Status: 401 Unauthorized`}
+                      language="json"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="bg-yellow-500/10 border border-yellow-500/30 rounded p-4">
@@ -264,6 +654,7 @@ export default function DocsPage() {
                   <li>Poll this endpoint every 2-3 seconds while waiting for QR scan</li>
                   <li>Once <code className="text-blue-400">connected: true</code>, stop polling and proceed to send messages</li>
                   <li>Use this to verify connection before sending messages</li>
+                  <li>Lightweight endpoint - safe to call frequently</li>
                 </ul>
               </div>
             </div>
@@ -426,78 +817,337 @@ export default function DocsPage() {
           >
             <div className="space-y-6">
               <div>
-                <h4 className="font-semibold mb-2">📝 Request Body (Text)</h4>
-                <CodeBlock
-                  id="v1-send-body"
-                  code={`{
-  "phoneNumber": "919876543210",
-  "message": "Hello from v1 API!"
-}`}
-                  language="json"
-                />
-              </div>
-
-              <div>
-                <h4 className="font-semibold mb-2">🔧 cURL Example (Text)</h4>
-                <CodeBlock
-                  id="v1-send-curl"
-                  code={`curl -X POST http://localhost:3000/api/v1/message/send \\
+                <h4 className="font-semibold mb-2 text-xl">📝 Send Text Message</h4>
+                <p className="text-sm text-gray-400 mb-3">Send plain text messages to WhatsApp contacts</p>
+                <MultiLanguageCodeBlock
+                  id="v1-send-text-examples"
+                  examples={[
+                    {
+                      lang: 'bash',
+                      label: 'cURL',
+                      code: `curl -X POST http://localhost:3000/api/v1/message/send \\
   -H "Authorization: Bearer YOUR_API_TOKEN" \\
   -H "Content-Type: application/json" \\
   -d '{
     "phoneNumber": "919876543210",
     "message": "Hello from v1 API!"
-  }'`}
+  }'`
+                    },
+                    {
+                      lang: 'javascript',
+                      label: 'JavaScript',
+                      code: `// Using Fetch API
+const response = await fetch('http://localhost:3000/api/v1/message/send', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_TOKEN',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    phoneNumber: '919876543210',
+    message: 'Hello from v1 API!'
+  })
+});
+
+const result = await response.json();
+console.log('Remaining credits:', result.remainingCredits);
+
+// Using Axios
+const axios = require('axios');
+
+const response = await axios.post('http://localhost:3000/api/v1/message/send', {
+  phoneNumber: '919876543210',
+  message: 'Hello from v1 API!'
+}, {
+  headers: {
+    'Authorization': 'Bearer YOUR_API_TOKEN'
+  }
+});
+
+console.log(response.data);`
+                    },
+                    {
+                      lang: 'python',
+                      label: 'Python',
+                      code: `import requests
+
+url = "http://localhost:3000/api/v1/message/send"
+headers = {
+    "Authorization": "Bearer YOUR_API_TOKEN",
+    "Content-Type": "application/json"
+}
+data = {
+    "phoneNumber": "919876543210",
+    "message": "Hello from v1 API!"
+}
+
+response = requests.post(url, json=data, headers=headers)
+result = response.json()
+print(f"Remaining credits: {result['remainingCredits']}")`
+                    },
+                    {
+                      lang: 'php',
+                      label: 'PHP',
+                      code: `<?php
+
+$url = "http://localhost:3000/api/v1/message/send";
+$token = "YOUR_API_TOKEN";
+
+$data = [
+    "phoneNumber" => "919876543210",
+    "message" => "Hello from v1 API!"
+];
+
+$ch = curl_init($url);
+curl_setopt($ch, CURLOPT_POST, true);
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+curl_setopt($ch, CURLOPT_HTTPHEADER, [
+    "Authorization: Bearer " . $token,
+    "Content-Type: application/json"
+]);
+curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+
+$response = curl_exec($ch);
+curl_close($ch);
+
+$result = json_decode($response, true);
+echo "Remaining credits: " . $result['remainingCredits'];
+
+?>`
+                    }
+                  ]}
                 />
               </div>
 
               <div>
-                <h4 className="font-semibold mb-2">📎 Send Image (FormData)</h4>
-                <CodeBlock
-                  id="v1-send-image-curl"
-                  code={`curl -X POST http://localhost:3000/api/v1/message/send \\
+                <h4 className="font-semibold mb-2 text-xl">📎 Send Image/Media Files</h4>
+                <p className="text-sm text-gray-400 mb-3">Send images, videos, audio, or documents using FormData</p>
+                <MultiLanguageCodeBlock
+                  id="v1-send-media-examples"
+                  examples={[
+                    {
+                      lang: 'bash',
+                      label: 'cURL',
+                      code: `# Send Image
+curl -X POST http://localhost:3000/api/v1/message/send \\
   -H "Authorization: Bearer YOUR_API_TOKEN" \\
   -F "phoneNumber=919876543210" \\
   -F "message=Check this out!" \\
-  -F "file=@image.jpg"`}
-                />
-              </div>
+  -F "file=@image.jpg"
 
-              <div>
-                <h4 className="font-semibold mb-2">📎 Send Document</h4>
-                <CodeBlock
-                  id="v1-send-doc-curl"
-                  code={`curl -X POST http://localhost:3000/api/v1/message/send \\
+# Send PDF Document
+curl -X POST http://localhost:3000/api/v1/message/send \\
   -H "Authorization: Bearer YOUR_API_TOKEN" \\
   -F "phoneNumber=919876543210" \\
   -F "message=Here's your document" \\
-  -F "file=@document.pdf"`}
+  -F "file=@document.pdf"
+
+# Send Video
+curl -X POST http://localhost:3000/api/v1/message/send \\
+  -H "Authorization: Bearer YOUR_API_TOKEN" \\
+  -F "phoneNumber=919876543210" \\
+  -F "file=@video.mp4"`
+                    },
+                    {
+                      lang: 'javascript',
+                      label: 'JavaScript',
+                      code: `// Using FormData (Browser or Node.js with form-data package)
+const FormData = require('form-data'); // Node.js only
+const fs = require('fs'); // Node.js only
+
+const formData = new FormData();
+formData.append('phoneNumber', '919876543210');
+formData.append('message', 'Check this out!');
+formData.append('file', fs.createReadStream('image.jpg')); // Node.js
+// OR in browser: formData.append('file', fileInput.files[0]);
+
+const response = await fetch('http://localhost:3000/api/v1/message/send', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_TOKEN'
+    // Don't set Content-Type, browser/FormData sets it automatically
+  },
+  body: formData
+});
+
+const result = await response.json();
+
+// Using Axios with file upload
+const axios = require('axios');
+const FormData = require('form-data');
+const fs = require('fs');
+
+const form = new FormData();
+form.append('phoneNumber', '919876543210');
+form.append('message', 'Check this out!');
+form.append('file', fs.createReadStream('image.jpg'));
+
+const response = await axios.post(
+  'http://localhost:3000/api/v1/message/send',
+  form,
+  {
+    headers: {
+      'Authorization': 'Bearer YOUR_API_TOKEN',
+      ...form.getHeaders()
+    }
+  }
+);`
+                    },
+                    {
+                      lang: 'python',
+                      label: 'Python',
+                      code: `import requests
+
+url = "http://localhost:3000/api/v1/message/send"
+headers = {"Authorization": "Bearer YOUR_API_TOKEN"}
+
+# Send image
+files = {
+    'file': ('image.jpg', open('image.jpg', 'rb'), 'image/jpeg')
+}
+data = {
+    'phoneNumber': '919876543210',
+    'message': 'Check this out!'
+}
+
+response = requests.post(url, headers=headers, files=files, data=data)
+print(response.json())
+
+# Send PDF document
+with open('document.pdf', 'rb') as file:
+    files = {'file': ('document.pdf', file, 'application/pdf')}
+    data = {
+        'phoneNumber': '919876543210',
+        'message': 'Here is your document'
+    }
+    response = requests.post(url, headers=headers, files=files, data=data)
+    print(response.json())`
+                    },
+                    {
+                      lang: 'php',
+                      label: 'PHP',
+                      code: `<?php
+
+$url = "http://localhost:3000/api/v1/message/send";
+$token = "YOUR_API_TOKEN";
+
+// Send image with CURLFile
+$file = new CURLFile('image.jpg', 'image/jpeg', 'image.jpg');
+
+$data = [
+    "phoneNumber" => "919876543210",
+    "message" => "Check this out!",
+    "file" => $file
+];
+
+$ch = curl_init($url);
+curl_setopt($ch, CURLOPT_POST, true);
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+curl_setopt($ch, CURLOPT_HTTPHEADER, [
+    "Authorization: Bearer " . $token
+]);
+curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+
+$response = curl_exec($ch);
+curl_close($ch);
+
+$result = json_decode($response, true);
+print_r($result);
+
+?>`
+                    }
+                  ]}
                 />
               </div>
 
               <div>
-                <h4 className="font-semibold mb-2">✅ Success Response</h4>
-                <CodeBlock
-                  id="v1-send-response"
-                  code={`{
+                <h4 className="font-semibold mb-2 text-lg">📊 Response Cases</h4>
+                <div className="space-y-4">
+                  {/* Case 1: Success */}
+                  <div className="border border-green-500/30 rounded-lg p-4 bg-green-500/5">
+                    <h5 className="font-semibold text-green-400 mb-2">✅ Case 1: Message Sent Successfully</h5>
+                    <CodeBlock
+                      id="v1-send-success"
+                      code={`{
   "message": "Message sent successfully",
   "contactId": 123,
   "remainingCredits": 99
-}`}
-                  language="json"
-                />
-              </div>
+}
 
-              <div>
-                <h4 className="font-semibold mb-2">❌ Error Response (Not Connected)</h4>
-                <CodeBlock
-                  id="v1-send-error"
-                  code={`{
+// HTTP Status: 200 OK`}
+                      language="json"
+                    />
+                  </div>
+
+                  {/* Case 2: Not Connected */}
+                  <div className="border border-red-500/30 rounded-lg p-4 bg-red-500/5">
+                    <h5 className="font-semibold text-red-400 mb-2">❌ Case 2: Not Connected</h5>
+                    <p className="text-sm text-gray-400 mb-3">
+                      WhatsApp not connected. User needs to scan QR code.
+                    </p>
+                    <CodeBlock
+                      id="v1-send-not-connected"
+                      code={`{
   "error": "WhatsApp not connected. Unable to restore session. Please connect via dashboard.",
   "needsQR": true
-}`}
-                  language="json"
-                />
+}
+
+// HTTP Status: 400 Bad Request
+// Action: Call /api/v1/auth/qr to generate QR code`}
+                      language="json"
+                    />
+                  </div>
+
+                  {/* Case 3: Insufficient Credits */}
+                  <div className="border border-orange-500/30 rounded-lg p-4 bg-orange-500/5">
+                    <h5 className="font-semibold text-orange-400 mb-2">❌ Case 3: Insufficient Credits</h5>
+                    <p className="text-sm text-gray-400 mb-3">
+                      User doesn't have enough credits to send message.
+                    </p>
+                    <CodeBlock
+                      id="v1-send-no-credits"
+                      code={`{
+  "error": "Insufficient credits"
+}
+
+// HTTP Status: 402 Payment Required
+// Action: Purchase more credits`}
+                      language="json"
+                    />
+                  </div>
+
+                  {/* Case 4: Invalid Phone Number */}
+                  <div className="border border-yellow-500/30 rounded-lg p-4 bg-yellow-500/5">
+                    <h5 className="font-semibold text-yellow-400 mb-2">❌ Case 4: Invalid Phone Number</h5>
+                    <p className="text-sm text-gray-400 mb-3">
+                      Recipient not on WhatsApp or invalid phone format.
+                    </p>
+                    <CodeBlock
+                      id="v1-send-invalid-phone"
+                      code={`{
+  "error": "Recipient not on WhatsApp"
+}
+
+// HTTP Status: 400 Bad Request
+// Action: Verify phone number format and WhatsApp registration`}
+                      language="json"
+                    />
+                  </div>
+
+                  {/* Case 5: Invalid Token */}
+                  <div className="border border-purple-500/30 rounded-lg p-4 bg-purple-500/5">
+                    <h5 className="font-semibold text-purple-400 mb-2">❌ Case 5: Invalid API Token</h5>
+                    <CodeBlock
+                      id="v1-send-invalid-token"
+                      code={`{
+  "error": "Invalid API token"
+}
+
+// HTTP Status: 401 Unauthorized`}
+                      language="json"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="bg-blue-500/10 border border-blue-500/30 rounded p-4">

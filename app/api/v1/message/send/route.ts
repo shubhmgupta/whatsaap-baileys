@@ -8,6 +8,16 @@ import { writeFile, unlink } from 'fs/promises';
 import { join } from 'path';
 import { readFileSync } from 'fs';
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
+export async function OPTIONS() {
+  return NextResponse.json({}, { headers: corsHeaders });
+}
+
 export async function POST(request: Request) {
   try {
     // Get API token from Authorization header
@@ -16,7 +26,7 @@ export async function POST(request: Request) {
     if (!token) {
       return NextResponse.json({ 
         error: 'Authorization token required. Format: Bearer YOUR_API_TOKEN' 
-      }, { status: 401 });
+      }, { status: 401, headers: corsHeaders });
     }
 
     // Get user from API token
@@ -25,14 +35,14 @@ export async function POST(request: Request) {
     if (!user) {
       return NextResponse.json({ 
         error: 'Invalid API token' 
-      }, { status: 401 });
+      }, { status: 401, headers: corsHeaders });
     }
 
     // Check credits
     if (user.credits === null || user.credits <= 0) {
       return NextResponse.json({ 
         error: 'Insufficient credits' 
-      }, { status: 402 });
+      }, { status: 402, headers: corsHeaders });
     }
 
     const contentType = request.headers.get('content-type') || '';
@@ -56,13 +66,13 @@ export async function POST(request: Request) {
     if (!phoneNumber) {
       return NextResponse.json({ 
         error: 'Phone number is required' 
-      }, { status: 400 });
+      }, { status: 400, headers: corsHeaders });
     }
 
     if (!message && !file) {
       return NextResponse.json({ 
         error: 'Message or file is required' 
-      }, { status: 400 });
+      }, { status: 400, headers: corsHeaders });
     }
 
     const userId = user.id;
@@ -105,7 +115,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ 
         error: 'WhatsApp not connected. Unable to restore session. Please connect via dashboard.',
         needsQR: true 
-      }, { status: 400 });
+      }, { status: 400, headers: corsHeaders });
     }
 
     const formattedNumber = phoneNumber.includes('@') ? phoneNumber : `${phoneNumber}@s.whatsapp.net`;
@@ -114,7 +124,7 @@ export async function POST(request: Request) {
     if (!result?.exists) {
       return NextResponse.json({ 
         error: 'Recipient is not on WhatsApp' 
-      }, { status: 400 });
+      }, { status: 400, headers: corsHeaders });
     }
 
     // Send message with or without file
@@ -208,12 +218,12 @@ export async function POST(request: Request) {
       message: 'Message sent successfully', 
       contactId: contact.id,
       remainingCredits: user.credits - 1
-    });
+    }, { headers: corsHeaders });
 
   } catch (error) {
     console.error('Send message error:', error);
     return NextResponse.json({ 
       error: 'Failed to send message. Please try again.' 
-    }, { status: 500 });
+    }, { status: 500, headers: corsHeaders });
   }
 }
