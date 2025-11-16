@@ -26,17 +26,49 @@ export async function POST(request: Request) {
     // First check if already connected - don't generate new QR
     const existingSession = await getSession(user.id.toString(), false);
     if (existingSession?.connected && existingSession?.sock?.user) {
-      return NextResponse.json({ error: 'Already connected to WhatsApp' }, { status: 400 });
+      return NextResponse.json({ 
+        error: 'Already connected to WhatsApp',
+        status: 'already_connected'
+      }, { status: 400 });
     }
 
-    // Use user ID as session identifier - pass waitForQR=true to create new session
+    // Check if session is currently connecting/restoring from database
+    if (existingSession?.connecting) {
+      return NextResponse.json({ 
+        message: 'Restoring session from database, please wait...',
+        status: 'restoring',
+        connecting: true
+      }, { status: 200 });
+    }
+
+    // Use user ID as session identifier - pass waitForQR=true to create/restore session
     const session = await getSession(user.id.toString(), true);
 
-    if (!session || !session.qr) {
-      return NextResponse.json({ error: 'Failed to generate QR code. Please try again.' }, { status: 500 });
+    // Check if session connected without QR (restored from database)
+    if (session?.connected && session?.sock?.user) {
+      return NextResponse.json({ 
+        message: 'Connected successfully using saved session',
+        status: 'auto_connected',
+        connected: true,
+        user: session.sock.user
+      }, { status: 200 });
     }
 
-    return NextResponse.json({ qr: session.qr });
+    // Check if still connecting (restoration in progress)
+    if (session?.connecting || !session?.qr) {
+      return NextResponse.json({ 
+        message: 'Connecting to WhatsApp, please wait...',
+        status: 'connecting',
+        connecting: true
+      }, { status: 200 });
+    }
+
+    // QR code generated for fresh connection
+    return NextResponse.json({ 
+      qr: session.qr,
+      status: 'qr_generated',
+      message: 'Scan QR code to connect'
+    });
   } catch (error) {
     console.error('QR generation error:', error);
     return NextResponse.json({ error: 'Failed to generate QR code. Please try again.' }, { status: 500 });

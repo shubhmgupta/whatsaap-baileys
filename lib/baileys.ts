@@ -168,8 +168,8 @@ async function cleanupInactiveSessions() {
   }
 }
 
-// Helper function to restore session auth state from database
-async function restoreSessionFromDatabase(userId: string): Promise<boolean> {
+// Helper function to check if session exists in database
+async function getSessionFromDatabase(userId: string): Promise<any | null> {
   try {
     const user = await db.query.users.findFirst({
       where: eq(users.id, parseInt(userId))
@@ -177,13 +177,22 @@ async function restoreSessionFromDatabase(userId: string): Promise<boolean> {
     
     if (!user?.whatsappSession) {
       console.log(`❌ No saved session found in DB for user ${userId}`);
-      return false;
+      return null;
     }
     
-    // Parse saved session data
+    // Parse and return saved session data
     const savedState = JSON.parse(user.whatsappSession);
-    
-    // Create session directory if it doesn't exist
+    console.log(`✅ Found session in database for user ${userId}`);
+    return savedState;
+  } catch (error) {
+    console.error(`Error fetching session from DB for user ${userId}:`, error);
+    return null;
+  }
+}
+
+// Helper function to write auth state to disk from database backup
+async function restoreSessionFilesFromState(userId: string, savedState: any): Promise<void> {
+  try {
     const sessionPath = path.join(process.cwd(), `sessions/user_${userId}`);
     await fs.ensureDir(sessionPath);
     
@@ -197,11 +206,10 @@ async function restoreSessionFromDatabase(userId: string): Promise<boolean> {
       await fs.writeJson(path.join(sessionPath, 'keys.json'), savedState.keys);
     }
     
-    console.log(`✅ Restored session from database for user ${userId}`);
-    return true;
+    console.log(`✅ Restored session files from database for user ${userId}`);
   } catch (error) {
-    console.error(`Error restoring session from DB for user ${userId}:`, error);
-    return false;
+    console.error(`Error restoring session files for user ${userId}:`, error);
+    throw error;
   }
 }
 
@@ -227,20 +235,28 @@ async function createBaileysSession(userId: string) {
   try {
     reconnectingUsers.add(userId);
     
-    // Check if session files exist, if not try to restore from database
+    // STEP 1: Check if session files exist on disk
     const sessionPath = path.join(process.cwd(), `sessions/user_${userId}`);
     const credsPath = path.join(sessionPath, 'creds.json');
+    const hasLocalFiles = await fs.pathExists(credsPath);
     
-    if (!await fs.pathExists(credsPath)) {
+    // STEP 2: If no local files, check database and restore
+    if (!hasLocalFiles) {
       console.log(`📂 Session files not found for user ${userId}, checking database...`);
-      const restored = await restoreSessionFromDatabase(userId);
+      const dbState = await getSessionFromDatabase(userId);
       
-      if (!restored) {
-        console.log(`⚠️ No session backup in database for user ${userId}, needs fresh QR scan`);
-        // Continue anyway - will generate new QR code
+      if (dbState) {
+        console.log(`💾 Restoring session from database for user ${userId}...`);
+        await restoreSessionFilesFromState(userId, dbState);
+        console.log(`✅ Session restored successfully, connecting...`);
+      } else {
+        console.log(`⚠️ No session backup in database for user ${userId}, will generate QR code`);
       }
+    } else {
+      console.log(`📁 Using existing session files for user ${userId}`);
     }
     
+    // STEP 3: Load auth state (either existing or restored)
     const { state, saveCreds } = await useMultiFileAuthState(`sessions/user_${userId}`);
     const { version } = await fetchLatestBaileysVersion();
 
@@ -557,27 +573,55 @@ export async function getSession(userId: string, waitForQR: boolean = false) {
     stopHeartbeat(userId);
   }
   
-  // 6. Only create new session if explicitly waiting for QR (user initiated)
+  // 6. Before creating new session, check if we have database backup
   if (!sessions.get(userId) && !reconnectingUsers.has(userId) && waitForQR) {
-    console.log('🆕 Creating new session for user:', userId);
-    await createBaileysSession(userId);
+    // Check database first
+    const dbState = await getSessionFromDatabase(userId);
     
-    // Wait for QR code to be generated (up to 30 seconds)
-    if (!sessions.get(userId)?.qr && !sessions.get(userId)?.connected) {
-      console.log('⏳ Waiting for QR code generation for user:', userId);
-      await new Promise((resolve, reject) => {
-        qrResolvers.set(userId, resolve);
-        
-        // Timeout after 30 seconds
-        setTimeout(() => {
-          if (qrResolvers.has(userId)) {
-            qrResolvers.delete(userId);
-            reject(new Error('QR code generation timeout'));
+    if (dbState) {
+      // Session exists in database - restore and connect (NO QR needed)
+      console.log('💾 Found session in database, restoring and connecting...');
+      await createBaileysSession(userId);
+      
+      // Wait for connection to establish (not QR, but actual connection)
+      console.log('⏳ Waiting for WhatsApp connection...');
+      await new Promise((resolve) => {
+        const checkConnection = setInterval(() => {
+          const session = sessions.get(userId);
+          if (session?.connected || session?.qr) {
+            clearInterval(checkConnection);
+            resolve(session);
           }
-        }, 30000);
-      }).catch(err => {
-        console.error('QR generation timeout:', err);
+        }, 500);
+        
+        // Timeout after 15 seconds
+        setTimeout(() => {
+          clearInterval(checkConnection);
+          resolve(sessions.get(userId));
+        }, 15000);
       });
+    } else {
+      // No database backup - create fresh session and wait for QR
+      console.log('🆕 Creating new session (no backup found), will generate QR code...');
+      await createBaileysSession(userId);
+      
+      // Wait for QR code to be generated (up to 30 seconds)
+      if (!sessions.get(userId)?.qr && !sessions.get(userId)?.connected) {
+        console.log('⏳ Waiting for QR code generation...');
+        await new Promise((resolve, reject) => {
+          qrResolvers.set(userId, resolve);
+          
+          // Timeout after 30 seconds
+          setTimeout(() => {
+            if (qrResolvers.has(userId)) {
+              qrResolvers.delete(userId);
+              reject(new Error('QR code generation timeout'));
+            }
+          }, 30000);
+        }).catch(err => {
+          console.error('QR generation timeout:', err);
+        });
+      }
     }
   }
   

@@ -126,6 +126,7 @@ export default function Dashboard() {
     setLoading(true);
     setError('');
     setQrCode('');
+    setSuccess('');
 
     try {
       const res = await fetch('/api/auth/qr', {
@@ -137,38 +138,85 @@ export default function Dashboard() {
       const data = await res.json();
 
       if (res.ok) {
-        setQrCode(data.qr);
-        setConnected(false);
-        setSuccess('QR code generated. Please scan with WhatsApp.');
-        
-        // Poll for connection status continuously
-        const interval = setInterval(async () => {
-          try {
-            const statusRes = await fetch(`/api/auth/status?userId=${user?.id || 1}`);
-            if (statusRes.ok) {
-              const statusData = await statusRes.json();
-              console.log('Status check:', statusData);
-              if (statusData.connected) {
-                setConnected(true);
-                setQrCode('');
-                setSuccess('WhatsApp connected successfully!');
-                clearInterval(interval);
-                // Reload contacts after connection
-                if (user?.id) {
-                  loadContacts(user.id);
-                }
-              }
+        // Handle different response statuses
+        switch (data.status) {
+          case 'auto_connected':
+            // Session restored from database, already connected
+            setConnected(true);
+            setSuccess('✅ Connected successfully using saved session!');
+            if (user?.id) {
+              loadContacts(user.id);
             }
-          } catch (err) {
-            console.error('Status check error:', err);
-          }
-        }, 2000);
+            break;
 
-        // Don't stop polling - let it run until connected
-        // Store interval reference if needed to clear later
-        (window as any).statusCheckInterval = interval;
+          case 'restoring':
+          case 'connecting':
+            // Session is being restored from database
+            setSuccess('🔄 Restoring session from database, please wait...');
+            // Poll for connection status
+            const restoreInterval = setInterval(async () => {
+              try {
+                const statusRes = await fetch(`/api/auth/status?userId=${user?.id || 1}`);
+                if (statusRes.ok) {
+                  const statusData = await statusRes.json();
+                  console.log('Status check:', statusData);
+                  if (statusData.connected) {
+                    setConnected(true);
+                    setQrCode('');
+                    setSuccess('✅ WhatsApp connected successfully!');
+                    clearInterval(restoreInterval);
+                    if (user?.id) {
+                      loadContacts(user.id);
+                    }
+                  }
+                }
+              } catch (err) {
+                console.error('Status check error:', err);
+              }
+            }, 2000);
+            (window as any).statusCheckInterval = restoreInterval;
+            break;
+
+          case 'qr_generated':
+            // Fresh connection, QR code generated
+            setQrCode(data.qr);
+            setConnected(false);
+            setSuccess('📱 Scan QR code with WhatsApp to connect');
+            
+            // Poll for connection status
+            const qrInterval = setInterval(async () => {
+              try {
+                const statusRes = await fetch(`/api/auth/status?userId=${user?.id || 1}`);
+                if (statusRes.ok) {
+                  const statusData = await statusRes.json();
+                  console.log('Status check:', statusData);
+                  if (statusData.connected) {
+                    setConnected(true);
+                    setQrCode('');
+                    setSuccess('✅ WhatsApp connected successfully!');
+                    clearInterval(qrInterval);
+                    if (user?.id) {
+                      loadContacts(user.id);
+                    }
+                  }
+                }
+              } catch (err) {
+                console.error('Status check error:', err);
+              }
+            }, 2000);
+            (window as any).statusCheckInterval = qrInterval;
+            break;
+
+          default:
+            setError('Unexpected response from server');
+        }
       } else {
-        setError(data.error || 'Failed to generate QR code');
+        if (data.status === 'already_connected') {
+          setConnected(true);
+          setSuccess('Already connected to WhatsApp!');
+        } else {
+          setError(data.error || 'Failed to connect');
+        }
       }
     } catch (err) {
       setError('Failed to connect. Please try again.');
@@ -451,7 +499,23 @@ export default function Dashboard() {
               {qrCode && (
                 <div className="mb-4 p-4 bg-white rounded-lg">
                   <img src={qrCode} alt="QR Code" className="w-full" />
-                  <p className="text-center text-gray-600 text-sm mt-2">Scan with WhatsApp</p>
+                  <p className="text-center text-gray-600 text-sm mt-2">
+                    <strong>Scan this QR code with WhatsApp</strong>
+                  </p>
+                  <p className="text-center text-gray-500 text-xs mt-1">
+                    Open WhatsApp → Settings → Linked Devices → Link a Device
+                  </p>
+                </div>
+              )}
+
+              {loading && !qrCode && (
+                <div className="mb-4 p-4 bg-blue-500/10 border border-blue-500/50 rounded-lg">
+                  <div className="flex items-center justify-center gap-3">
+                    <Loader2 className="w-5 h-5 animate-spin text-blue-400" />
+                    <p className="text-blue-400 text-sm">
+                      Checking for saved session...
+                    </p>
+                  </div>
                 </div>
               )}
 
@@ -465,7 +529,7 @@ export default function Dashboard() {
                     {loading ? (
                       <>
                         <Loader2 className="w-5 h-5 animate-spin" />
-                        Generating QR...
+                        Connecting...
                       </>
                     ) : (
                       <>
