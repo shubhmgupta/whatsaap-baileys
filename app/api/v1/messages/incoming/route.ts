@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/baileys';
-import { getUserFromToken } from '@/lib/api-auth';
+import { getUserFromToken, ensureWhatsAppSession } from '@/lib/api-auth';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -32,19 +31,30 @@ export async function GET(request: Request) {
       }, { status: 401, headers: corsHeaders });
     }
 
-    const userId = user.id.toString();
-    const session = await getSession(userId, false);
+    const userId = user.id;
 
-    if (!session || !session.connected) {
+    // Ensure WhatsApp session is connected (auto-restore if needed)
+    const sessionCheck = await ensureWhatsAppSession(userId);
+    
+    if (sessionCheck.status === 'restoring') {
       return NextResponse.json({ 
-        error: 'WhatsApp not connected',
-        needsQR: true
+        error: sessionCheck.message || 'WhatsApp session is being restored',
+        status: 'restoring',
+        message: 'Please retry in a few seconds'
+      }, { status: 503, headers: corsHeaders });
+    }
+    
+    if (sessionCheck.status === 'needs_qr') {
+      return NextResponse.json({ 
+        error: sessionCheck.message || 'WhatsApp not connected',
+        status: 'needs_qr',
+        message: 'Please generate QR code at /api/v1/auth/qr first'
       }, { status: 400, headers: corsHeaders });
     }
 
     // Get incoming messages from messageStore
     const messageStore = (globalThis as any).messageStore || new Map();
-    const userMessages = messageStore.get(userId) || [];
+    const userMessages = messageStore.get(userId.toString()) || [];
 
     return NextResponse.json({
       messages: userMessages

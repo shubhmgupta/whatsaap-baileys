@@ -669,31 +669,47 @@ export async function getSession(userId: string, waitForQR: boolean = false) {
           const session = sessions.get(userId);
           attempts++;
           
-          // Success: Connected or QR generated
-          if (session?.connected || session?.qr) {
+          // Success: Connected
+          if (session?.connected && session?.sock?.user) {
             clearInterval(checkConnection);
+            console.log('✅ Session restored and connected successfully');
             resolve(session);
           }
           
-          // Failure: Session deleted (Status 401 logout detected)
+          // QR generated means restoration failed
+          if (session?.qr) {
+            clearInterval(checkConnection);
+            console.log('⚠️ QR generated during restoration - credentials were invalid');
+            resolve(session);
+          }
+          
+          // Failure: Session deleted (Status 401/440 logout detected)
           if (!session && attempts > 2) {
             clearInterval(checkConnection);
+            console.log('❌ Session was deleted - invalid credentials');
             resolve(null);
           }
           
-          // Timeout after 15 seconds
-          if (attempts >= 30) { // 30 * 500ms = 15 seconds
+          // Timeout after 8 seconds (reduced from 15)
+          if (attempts >= 16) { // 16 * 500ms = 8 seconds
             clearInterval(checkConnection);
+            console.log('⏱️ Restoration timeout - assuming credentials invalid');
             resolve(session);
           }
         }, 500);
       });
       
-      // If restoration failed (session was deleted due to Status 401)
-      if (!restoredSession && !sessions.get(userId)) {
+      // Check if restoration failed (session deleted, QR generated, or timeout)
+      const currentSession = sessions.get(userId);
+      const restorationFailed = !restoredSession || 
+                                 !currentSession || 
+                                 currentSession?.qr || 
+                                 (!currentSession?.connected && !currentSession?.connecting);
+      
+      if (restorationFailed) {
         console.log('❌ Session restoration failed (invalid credentials). Generating fresh QR code...');
         
-        // Clear database backup since it's invalid
+        // Clear database backup since it's invalid (run synchronously to prevent retry)
         try {
           await db.update(users).set({ 
             whatsappSession: null
@@ -703,7 +719,13 @@ export async function getSession(userId: string, waitForQR: boolean = false) {
           console.error('Failed to clear database backup:', error);
         }
         
-        // Create fresh session for QR generation
+        // If QR was already generated during restoration attempt, we're done
+        if (currentSession?.qr) {
+          console.log('✅ QR already available from failed restoration');
+          return currentSession;
+        }
+        
+        // Otherwise, create fresh session for QR generation
         await createBaileysSession(userId);
         
         // Wait for QR code

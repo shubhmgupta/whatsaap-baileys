@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/baileys';
-import { getUserFromToken } from '@/lib/api-auth';
+import { getUserFromToken, ensureWhatsAppSession } from '@/lib/api-auth';
 import { db } from '@/lib/db';
 import { messages, users, contacts, chatMessages } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
@@ -78,43 +78,30 @@ export async function POST(request: Request) {
 
     const userId = user.id;
 
-    // First check if session exists in memory
-    let session = await getSession(userId.toString(), false);
+    // Ensure WhatsApp session is connected (auto-restore if needed)
+    const sessionCheck = await ensureWhatsAppSession(userId);
     
-    // If not connected, try to restore from database and reconnect
-    if (!session || !session.connected || !session.sock?.user) {
-      console.log(`📡 Attempting to restore session for user ${userId} before sending message...`);
-      
-      // Try to restore and connect (waitForQR=false means no QR generation, just restore)
-      session = await getSession(userId.toString(), true);
-      
-      // Wait up to 15 seconds for connection to establish
-      if (session && !session.connected) {
-        await new Promise((resolve) => {
-          let attempts = 0;
-          const checkInterval = setInterval(() => {
-            const currentSession = session;
-            attempts++;
-            
-            if (currentSession?.connected && currentSession?.sock?.user) {
-              clearInterval(checkInterval);
-              resolve(true);
-            } else if (attempts >= 30) { // 30 * 500ms = 15 seconds
-              clearInterval(checkInterval);
-              resolve(false);
-            }
-          }, 500);
-        });
-        
-        // Refresh session after waiting
-        session = await getSession(userId.toString(), false);
-      }
+    if (sessionCheck.status === 'restoring') {
+      return NextResponse.json({ 
+        error: sessionCheck.message || 'WhatsApp session is being restored',
+        status: 'restoring',
+        message: 'Please retry in a few seconds'
+      }, { status: 503, headers: corsHeaders });
     }
     
-    // Final check - if still not connected, return error
-    if (!session || !session.connected || !session.sock?.user) {
+    if (sessionCheck.status === 'needs_qr') {
       return NextResponse.json({ 
-        error: 'WhatsApp not connected. Unable to restore session. Please connect via dashboard.',
+        error: sessionCheck.message || 'WhatsApp not connected',
+        status: 'needs_qr',
+        message: 'Please generate QR code at /api/v1/auth/qr first'
+      }, { status: 400, headers: corsHeaders });
+    }
+    
+    const session = sessionCheck.session;
+    
+    if (!session || !session.sock?.user) {
+      return NextResponse.json({ 
+        error: 'WhatsApp session error. Please reconnect.',
         needsQR: true 
       }, { status: 400, headers: corsHeaders });
     }

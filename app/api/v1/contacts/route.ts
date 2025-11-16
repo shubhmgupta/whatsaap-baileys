@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getUserFromToken } from '@/lib/api-auth';
+import { getUserFromToken, ensureWhatsAppSession } from '@/lib/api-auth';
 import { db } from '@/lib/db';
 import { contacts } from '@/db/schema';
 import { eq, desc } from 'drizzle-orm';
@@ -35,6 +35,25 @@ export async function GET(request: Request) {
     }
 
     const userId = user.id;
+
+    // Ensure WhatsApp session is connected (auto-restore if needed)
+    const sessionCheck = await ensureWhatsAppSession(userId);
+    
+    if (sessionCheck.status === 'restoring') {
+      return NextResponse.json({ 
+        error: sessionCheck.message || 'WhatsApp session is being restored',
+        status: 'restoring',
+        message: 'Please retry in a few seconds'
+      }, { status: 503, headers: corsHeaders });
+    }
+    
+    if (sessionCheck.status === 'needs_qr') {
+      return NextResponse.json({ 
+        error: sessionCheck.message || 'WhatsApp not connected',
+        status: 'needs_qr',
+        message: 'Please generate QR code at /api/v1/auth/qr first'
+      }, { status: 400, headers: corsHeaders });
+    }
 
     // Get all contacts for user
     const userContacts = await db.query.contacts.findMany({

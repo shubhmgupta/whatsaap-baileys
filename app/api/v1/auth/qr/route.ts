@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/baileys';
-import { getUserFromToken } from '@/lib/api-auth';
+import { getUserFromToken, ensureWhatsAppSession } from '@/lib/api-auth';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -34,37 +34,41 @@ export async function POST(request: Request) {
 
     const userId = user.id;
 
-    // First check if already connected - don't generate new QR
-    const existingSession = await getSession(userId.toString(), false);
-    if (existingSession?.connected && existingSession?.sock?.user) {
+    // Check current session status and auto-restore if needed
+    const sessionCheck = await ensureWhatsAppSession(userId);
+    
+    // If already connected, return success
+    if (sessionCheck.status === 'connected' && sessionCheck.session?.sock?.user) {
       return NextResponse.json({ 
-        error: 'Already connected to WhatsApp',
+        message: 'Already connected to WhatsApp',
         status: 'already_connected',
+        connected: true,
         user: {
-          id: existingSession.sock.user.id,
-          name: existingSession.sock.user.name
+          id: sessionCheck.session.sock.user.id,
+          name: sessionCheck.session.sock.user.name
         }
-      }, { status: 400, headers: corsHeaders });
+      }, { headers: corsHeaders });
     }
-
-    // Check if currently connecting and has QR
-    if (existingSession?.connecting && existingSession?.qr) {
+    
+    // If restoring, check if QR or connection is available
+    const existingSession = await getSession(userId.toString(), false);
+    
+    if (existingSession?.qr) {
       return NextResponse.json({ 
         qr: existingSession.qr,
         status: 'qr_generated',
         message: 'Scan QR code to connect'
       }, { headers: corsHeaders });
     }
-
-    // Check if restoring session (connecting but no QR yet)
+    
     if (existingSession?.connecting && !existingSession?.qr) {
       return NextResponse.json({ 
-        status: 'connecting',
-        message: 'Connection in progress. Please wait...'
+        status: 'restoring',
+        message: 'Restoring session from database. Please wait...'
       }, { headers: corsHeaders });
     }
 
-    // No existing session or session is disconnected - generate new QR
+    // No session or disconnected - generate new QR
     console.log(`📱 Generating QR code for user ${userId}...`);
     const session = await getSession(userId.toString(), true);
     
