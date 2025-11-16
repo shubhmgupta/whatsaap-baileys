@@ -54,21 +54,29 @@ export async function POST(request: Request) {
       }, { status: 200 });
     }
 
-    // Check if still connecting (restoration in progress)
-    if (session?.connecting || !session?.qr) {
+    // If QR code exists, return it (even if still connecting)
+    if (session?.qr) {
       return NextResponse.json({ 
-        message: 'Connecting to WhatsApp, please wait...',
+        qr: session.qr,
+        status: 'qr_generated',
+        message: 'Scan QR code to connect'
+      });
+    }
+
+    // Check if still connecting/waiting for QR (restoration in progress or QR pending)
+    if (session?.connecting || session?.sock) {
+      return NextResponse.json({ 
+        message: 'Generating QR code, please wait...',
         status: 'connecting',
         connecting: true
       }, { status: 200 });
     }
 
-    // QR code generated for fresh connection
+    // No session created
     return NextResponse.json({ 
-      qr: session.qr,
-      status: 'qr_generated',
-      message: 'Scan QR code to connect'
-    });
+      error: 'Failed to generate QR code',
+      status: 'error'
+    }, { status: 500 });
   } catch (error) {
     console.error('QR generation error:', error);
     return NextResponse.json({ error: 'Failed to generate QR code. Please try again.' }, { status: 500 });

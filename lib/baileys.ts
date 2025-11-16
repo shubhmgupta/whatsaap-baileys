@@ -368,13 +368,27 @@ async function createBaileysSession(userId: string) {
           }
         }, delay);
       } else {
-        // Only clear session if user explicitly logged out from WhatsApp
-        console.log(`🔌 User ${userId} logged out from WhatsApp`);
+        // User explicitly logged out from WhatsApp (Status 401)
+        console.log(`🔌 User ${userId} logged out from WhatsApp - clearing all session data`);
+        
+        // Clear in-memory session
         sessions.delete(userId);
         messageStore.delete(userId);
         qrResolvers.delete(userId);
+        
+        // Clear session files
         const sessionDir = path.join(process.cwd(), `sessions/user_${userId}`);
         await fs.remove(sessionDir).catch(err => console.error('Failed to remove session directory:', err));
+        
+        // IMPORTANT: Clear database backup so we generate fresh QR on reconnect
+        try {
+          await db.update(users).set({ 
+            whatsappSession: null
+          }).where(eq(users.id, parseInt(userId)));
+          console.log(`🗑️ Database session backup cleared for user ${userId}`);
+        } catch (error) {
+          console.error('Failed to clear database session:', error);
+        }
       }
     } else if (connection === 'open') {
       console.log('✅ WhatsApp connected successfully for user:', userId);
@@ -394,6 +408,7 @@ async function createBaileysSession(userId: string) {
           ...sessions.get(userId), 
           sock, 
           connected: true,
+          connecting: false, // Clear connecting flag
           user: sock.user,
           lastConnected: new Date()
         });
@@ -557,7 +572,10 @@ export async function getSession(userId: string, waitForQR: boolean = false) {
   
   // 3. If session has socket but no user yet, it's still establishing connection
   if (existingSession?.sock && !existingSession?.sock?.user) {
-    console.log('⏳ Session connecting for user:', userId);
+    // Don't log on every status check - only when explicitly requested
+    if (waitForQR) {
+      console.log('⏳ Session connecting for user:', userId);
+    }
     return existingSession; // Don't clear, let it finish connecting
   }
   
@@ -585,21 +603,62 @@ export async function getSession(userId: string, waitForQR: boolean = false) {
       
       // Wait for connection to establish (not QR, but actual connection)
       console.log('⏳ Waiting for WhatsApp connection...');
-      await new Promise((resolve) => {
+      const restoredSession = await new Promise<any>((resolve) => {
+        let attempts = 0;
         const checkConnection = setInterval(() => {
           const session = sessions.get(userId);
+          attempts++;
+          
+          // Success: Connected or QR generated
           if (session?.connected || session?.qr) {
             clearInterval(checkConnection);
             resolve(session);
           }
+          
+          // Failure: Session deleted (Status 401 logout detected)
+          if (!session && attempts > 2) {
+            clearInterval(checkConnection);
+            resolve(null);
+          }
+          
+          // Timeout after 15 seconds
+          if (attempts >= 30) { // 30 * 500ms = 15 seconds
+            clearInterval(checkConnection);
+            resolve(session);
+          }
         }, 500);
-        
-        // Timeout after 15 seconds
-        setTimeout(() => {
-          clearInterval(checkConnection);
-          resolve(sessions.get(userId));
-        }, 15000);
       });
+      
+      // If restoration failed (session was deleted due to Status 401)
+      if (!restoredSession && !sessions.get(userId)) {
+        console.log('❌ Session restoration failed (invalid credentials). Generating fresh QR code...');
+        
+        // Clear database backup since it's invalid
+        try {
+          await db.update(users).set({ 
+            whatsappSession: null
+          }).where(eq(users.id, parseInt(userId)));
+          console.log('🗑️ Cleared invalid database backup for user:', userId);
+        } catch (error) {
+          console.error('Failed to clear database backup:', error);
+        }
+        
+        // Create fresh session for QR generation
+        await createBaileysSession(userId);
+        
+        // Wait for QR code
+        await new Promise((resolve, reject) => {
+          qrResolvers.set(userId, resolve);
+          setTimeout(() => {
+            if (qrResolvers.has(userId)) {
+              qrResolvers.delete(userId);
+              reject(new Error('QR code generation timeout'));
+            }
+          }, 30000);
+        }).catch(err => {
+          console.error('QR generation timeout:', err);
+        });
+      }
     } else {
       // No database backup - create fresh session and wait for QR
       console.log('🆕 Creating new session (no backup found), will generate QR code...');
