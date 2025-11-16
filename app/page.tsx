@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import { MessageSquare, Zap, Shield, Code, CheckCircle2, ArrowRight } from 'lucide-react';
-import { PricingSection } from '@/components/PricingSection';
 
 export default function Home() {
   const appName = process.env.NEXT_PUBLIC_APP_NAME || 'Codefy';
@@ -15,8 +14,7 @@ export default function Home() {
           </Link>
           <nav className="hidden md:flex items-center space-x-8">
             <a href="#features" className="text-gray-300 hover:text-white transition">Features</a>
-            <a href="#pricing" className="text-gray-300 hover:text-white transition">Pricing</a>
-            <a href="#api" className="text-gray-300 hover:text-white transition">API</a>
+            <Link href="/docs" className="text-gray-300 hover:text-white transition">Docs</Link>
           </nav>
           <div className="flex items-center space-x-4">
             <Link href="/signin" className="text-gray-300 hover:text-white transition">Sign In</Link>
@@ -44,9 +42,9 @@ export default function Home() {
               Start Free Trial
               <ArrowRight className="ml-2 w-5 h-5" />
             </Link>
-            <a href="#api" className="bg-gray-800 hover:bg-gray-700 text-white font-bold py-4 px-8 rounded-lg transition border border-gray-700">
+            <Link href="/docs" className="bg-gray-800 hover:bg-gray-700 text-white font-bold py-4 px-8 rounded-lg transition border border-gray-700">
               View Documentation
-            </a>
+            </Link>
           </div>
         </div>
       </section>
@@ -116,34 +114,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Pricing Section */}
-      <PricingSection />
-
-      {/* API Preview */}
-      <section id="api" className="container mx-auto px-4 py-20">
-        <div className="text-center mb-16">
-          <h2 className="text-4xl md:text-5xl font-bold mb-4">Simple, Powerful API</h2>
-          <p className="text-xl text-gray-400">Send your first message in minutes</p>
-        </div>
-        <div className="max-w-3xl mx-auto bg-gray-800 rounded-lg p-6 border border-gray-700 mb-8">
-          <pre className="text-sm text-green-400 overflow-x-auto">
-            <code>{`curl -X POST https://yourapi.com/api/message/send \
-  -H "Authorization: Bearer YOUR_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "to": "1234567890",
-    "message": "Hello from WhatsApp SaaS!"
-  }'`}</code>
-          </pre>
-        </div>
-        <div className="text-center">
-          <Link href="/docs" className="inline-flex items-center gap-2 bg-gradient-to-r from-green-500 to-blue-600 hover:from-green-600 hover:to-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition">
-            View Full Documentation
-            <ArrowRight className="w-5 h-5" />
-          </Link>
-        </div>
-      </section>
-
       {/* CTA Section */}
       <section className="container mx-auto px-4 py-20">
         <div className="bg-gradient-to-r from-green-600 to-blue-600 rounded-3xl p-12 text-center">
@@ -168,8 +138,8 @@ export default function Home() {
               <h4 className="font-semibold mb-4">Product</h4>
               <ul className="space-y-2 text-gray-400">
                 <li><a href="#features" className="hover:text-white transition">Features</a></li>
-                <li><a href="#pricing" className="hover:text-white transition">Pricing</a></li>
-                <li><a href="#api" className="hover:text-white transition">API Docs</a></li>
+                <li><Link href="/docs" className="hover:text-white transition">Documentation</Link></li>
+                <li><Link href="/dashboard" className="hover:text-white transition">Dashboard</Link></li>
               </ul>
             </div>
             <div>
