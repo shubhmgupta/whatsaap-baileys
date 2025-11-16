@@ -30,6 +30,7 @@ export default function Dashboard() {
   const [bulkFile, setBulkFile] = useState<File | null>(null);
   const [incomingMessages, setIncomingMessages] = useState<any[]>([]);
   const [showInbox, setShowInbox] = useState(false);
+  const [manuallyDisconnected, setManuallyDisconnected] = useState(false);
 
   useEffect(() => {
     // Get user from session storage (temporary - replace with proper session management)
@@ -39,8 +40,15 @@ export default function Dashboard() {
       setUser(parsedUser);
       
       // Attempt auto-restore from database on page load (no QR generation if no backup)
+      // Skip if user manually disconnected
       (async () => {
         try {
+          const wasManuallyDisconnected = sessionStorage.getItem('manuallyDisconnected') === 'true';
+          if (wasManuallyDisconnected) {
+            console.log('⏭️ Skipping auto-restore (user manually disconnected)');
+            return;
+          }
+          
           const res = await fetch('/api/auth/restore', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -166,6 +174,9 @@ export default function Dashboard() {
             // Session restored from database, already connected
             setConnected(true);
             setSuccess('✅ Connected successfully using saved session!');
+            // Clear manual disconnect flag since user is connecting again
+            setManuallyDisconnected(false);
+            sessionStorage.removeItem('manuallyDisconnected');
             if (user?.id) {
               loadContacts(user.id);
             }
@@ -204,6 +215,9 @@ export default function Dashboard() {
             setQrCode(data.qr);
             setConnected(false);
             setSuccess('📱 Scan QR code with WhatsApp to connect');
+            // Clear manual disconnect flag since user is attempting to connect
+            setManuallyDisconnected(false);
+            sessionStorage.removeItem('manuallyDisconnected');
             
             // Poll for connection status
             const qrInterval = setInterval(async () => {
@@ -262,6 +276,9 @@ export default function Dashboard() {
         setConnected(false);
         setQrCode('');
         setSuccess('WhatsApp disconnected successfully');
+        // Set flag to prevent auto-restore on page reload
+        setManuallyDisconnected(true);
+        sessionStorage.setItem('manuallyDisconnected', 'true');
       } else {
         const data = await res.json();
         setError(data.error || 'Failed to logout');

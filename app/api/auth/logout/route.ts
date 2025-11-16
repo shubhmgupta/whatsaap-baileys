@@ -1,4 +1,8 @@
 import { NextResponse } from 'next/server';
+import { logoutSession } from '@/lib/baileys';
+import { db } from '@/lib/db';
+import { users } from '@/db/schema';
+import { eq } from 'drizzle-orm';
 
 export async function POST(request: Request) {
   try {
@@ -7,12 +11,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
-    // Don't disconnect WhatsApp when user logs out from web app
-    // WhatsApp connection should persist until user explicitly disconnects
+    // Properly disconnect from WhatsApp (invalidates session on phone)
+    console.log(`🔌 Disconnecting WhatsApp for user ${userId}...`);
+    await logoutSession(userId.toString());
     
-    const response = NextResponse.json({ message: 'Logged out successfully' });
+    // Clear database backup
+    try {
+      await db.update(users).set({ 
+        whatsappSession: null
+      }).where(eq(users.id, parseInt(userId)));
+      console.log(`🗑️ Cleared database backup for user ${userId}`);
+    } catch (dbError) {
+      console.error('Error clearing database backup:', dbError);
+    }
     
-    // Clear the authentication token cookie
+    const response = NextResponse.json({ 
+      message: 'WhatsApp disconnected successfully. Session invalidated.' 
+    });
+    
+    // Clear the authentication token cookie (web session)
     response.cookies.set('token', '', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -24,6 +41,6 @@ export async function POST(request: Request) {
     return response;
   } catch (error) {
     console.error('Logout error:', error);
-    return NextResponse.json({ error: 'Failed to logout. Please try again.' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to disconnect. Please try again.' }, { status: 500 });
   }
 }
