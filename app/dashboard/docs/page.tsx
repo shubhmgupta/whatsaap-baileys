@@ -196,7 +196,7 @@ export default function DocsPage() {
           <h2 className="text-2xl font-bold mb-4">📋 Table of Contents</h2>
           <div className="grid md:grid-cols-2 gap-3">
             <a href="#v1-authentication" className="text-blue-400 hover:text-blue-300">1. Authentication & Connection</a>
-            <a href="#v1-messages" className="text-blue-400 hover:text-blue-300">2. Send Messages</a>
+            <a href="#v1-messages" className="text-blue-400 hover:text-blue-300">2. Send & Receive Messages</a>
             <a href="#v1-contacts" className="text-blue-400 hover:text-blue-300">3. Contacts Management</a>
             <a href="#v1-best-practices" className="text-blue-400 hover:text-blue-300">4. Best Practices</a>
           </div>
@@ -802,10 +802,10 @@ function pollStatus($url, $token) {
         <div id="v1-messages" className="mb-12">
           <h2 className="text-3xl font-bold mb-6 flex items-center gap-3">
             <Code2 className="w-8 h-8 text-blue-400" />
-            2. Send Messages
+            2. Send & Receive Messages
           </h2>
           <p className="text-gray-400 mb-6">
-            Send text messages, images, videos, audio, and documents to WhatsApp contacts using API token authentication.
+            Send text messages, images, videos, audio, and documents to WhatsApp contacts. Receive incoming messages via webhook.
           </p>
 
           {/* Send Text Message */}
@@ -1215,6 +1215,178 @@ print_r($result);
               </div>
             </div>
           </Section>
+
+          {/* Receive Webhook */}
+          <Section
+            id="v1-message-receive"
+            title="Receive Messages (Webhook)"
+            method="POST"
+            endpoint="/api/v1/message/receive"
+            description="Store incoming WhatsApp messages from external webhooks"
+          >
+            <div className="space-y-6">
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+                <p className="text-sm text-blue-400">
+                  <strong>💡 Webhook Usage:</strong> Use this endpoint to forward incoming WhatsApp messages from your webhook provider or external system. All messages are stored in the database for later retrieval.
+                </p>
+              </div>
+
+              <div>
+                <h4 className="font-semibold mb-2">Required Headers</h4>
+                <CodeBlock
+                  id="v1-receive-headers"
+                  code={`Authorization: Bearer YOUR_API_TOKEN
+Content-Type: application/json`}
+                  language="bash"
+                />
+              </div>
+
+              <div>
+                <h4 className="font-semibold mb-2">Request Body</h4>
+                <p className="text-sm text-gray-400 mb-3">Required fields to store incoming messages:</p>
+                <CodeBlock
+                  id="v1-receive-body"
+                  code={`{
+  "from": "919876543210",        // Required: Sender's phone number
+  "message": "Hello, this is an incoming message",  // Required: Message text
+  "timestamp": 1234567890         // Optional: Unix timestamp (auto-generated if not provided)
+}`}
+                  language="json"
+                />
+              </div>
+
+              <div>
+                <h4 className="font-semibold mb-2">Example: Send Webhook Data</h4>
+                <MultiLanguageCodeBlock
+                  id="v1-receive-examples"
+                  examples={[
+                    {
+                      lang: 'bash',
+                      label: 'cURL',
+                      code: `curl -X POST ${baseUrl}/api/v1/message/receive \\
+  -H "Authorization: Bearer YOUR_API_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "from": "919876543210",
+    "message": "Hello from customer",
+    "timestamp": 1234567890
+  }'`
+                    },
+                    {
+                      lang: 'javascript',
+                      label: 'JavaScript',
+                      code: `// Webhook handler example
+const response = await fetch('${baseUrl}/api/v1/message/receive', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_TOKEN',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    from: '919876543210',
+    message: 'Hello from customer',
+    timestamp: Math.floor(Date.now() / 1000)
+  })
+});
+
+const data = await response.json();
+console.log(data);`
+                    },
+                    {
+                      lang: 'python',
+                      label: 'Python',
+                      code: `import requests
+import time
+
+# Send webhook data
+url = "${baseUrl}/api/v1/message/receive"
+headers = {
+    "Authorization": "Bearer YOUR_API_TOKEN",
+    "Content-Type": "application/json"
+}
+payload = {
+    "from": "919876543210",
+    "message": "Hello from customer",
+    "timestamp": int(time.time())
+}
+
+response = requests.post(url, headers=headers, json=payload)
+print(response.json())`
+                    },
+                    {
+                      lang: 'php',
+                      label: 'PHP',
+                      code: `<?php
+// Receive webhook
+$url = "${baseUrl}/api/v1/message/receive";
+$headers = [
+    "Authorization: Bearer YOUR_API_TOKEN",
+    "Content-Type: application/json"
+];
+$payload = json_encode([
+    "from" => "919876543210",
+    "message" => "Hello from customer",
+    "timestamp" => time()
+]);
+
+$ch = curl_init($url);
+curl_setopt($ch, CURLOPT_POST, true);
+curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+$response = curl_exec($ch);
+echo $response;
+?>`
+                    }
+                  ]}
+                />
+              </div>
+
+              <div>
+                <h4 className="font-semibold mb-2">Success Response</h4>
+                <CodeBlock
+                  id="v1-receive-success"
+                  code={`{
+  "message": "Webhook received and stored successfully"
+}`}
+                  language="json"
+                />
+              </div>
+
+              <div>
+                <h4 className="font-semibold mb-2">Error Responses</h4>
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-sm text-gray-400 mb-2">Missing required fields:</p>
+                    <CodeBlock
+                      id="v1-receive-error-missing"
+                      code={`{
+  "error": "Missing required fields: from, message"
+}`}
+                      language="json"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-400 mb-2">Invalid API token:</p>
+                    <CodeBlock
+                      id="v1-receive-error-auth"
+                      code={`{
+  "error": "Invalid API token"
+}`}
+                      language="json"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
+                <p className="text-sm text-green-400">
+                  <strong>📥 Retrieving Stored Messages:</strong> After storing messages with this endpoint, retrieve them using <code className="bg-gray-800 px-2 py-1 rounded">GET /api/v1/messages/incoming</code> endpoint (see documentation below).
+                </p>
+              </div>
+            </div>
+          </Section>
         </div>
 
         {/* 3. CONTACTS SECTION */}
@@ -1292,6 +1464,267 @@ print_r($result);
               </p>
             </div>
           </div>
+
+          {/* Contact Messages - Get */}
+          <Section
+            id="v1-contact-messages-get"
+            title="Get Contact Messages"
+            method="GET"
+            endpoint="/api/v1/contacts/messages"
+            description="Retrieve chat history for a specific contact (contact automatically identified from token and phone number)"
+          >
+            <div className="space-y-6">
+              <div>
+                <h4 className="font-semibold mb-2">Query Parameters</h4>
+                <div className="bg-gray-900/50 p-4 rounded">
+                  <p className="text-sm text-gray-300"><code className="text-yellow-400">phoneNumber</code> - <span className="text-red-400">Required</span>. Contact's phone number with country code</p>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="font-semibold mb-2">Example Request</h4>
+                <MultiLanguageCodeBlock
+                  id="v1-contact-messages-get-examples"
+                  examples={[
+                    {
+                      lang: 'bash',
+                      label: 'cURL',
+                      code: `curl -X GET "${baseUrl}/api/v1/contacts/messages?phoneNumber=919876543210" \\
+  -H "Authorization: Bearer YOUR_API_TOKEN"`
+                    },
+                    {
+                      lang: 'javascript',
+                      label: 'JavaScript',
+                      code: `const phoneNumber = '919876543210';
+
+const response = await fetch(\`${baseUrl}/api/v1/contacts/messages?phoneNumber=\${phoneNumber}\`, {
+  headers: {
+    'Authorization': 'Bearer YOUR_API_TOKEN'
+  }
+});
+
+const data = await response.json();
+console.log('Messages:', data.messages);`
+                    },
+                    {
+                      lang: 'python',
+                      label: 'Python',
+                      code: `import requests
+
+phone_number = "919876543210"
+
+url = f"${baseUrl}/api/v1/contacts/messages"
+headers = {
+    "Authorization": "Bearer YOUR_API_TOKEN"
+}
+params = {
+    "phoneNumber": phone_number
+}
+
+response = requests.get(url, headers=headers, params=params)
+messages = response.json()["messages"]
+print(f"Retrieved {len(messages)} messages")`
+                    },
+                    {
+                      lang: 'php',
+                      label: 'PHP',
+                      code: `<?php
+$phoneNumber = "919876543210";
+
+$url = "${baseUrl}/api/v1/contacts/messages?phoneNumber=" . $phoneNumber;
+$headers = [
+    "Authorization: Bearer YOUR_API_TOKEN"
+];
+
+$ch = curl_init($url);
+curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+$response = curl_exec($ch);
+$data = json_decode($response, true);
+echo "Messages: " . count($data["messages"]);
+?>`
+                    }
+                  ]}
+                />
+              </div>
+
+              <div>
+                <h4 className="font-semibold mb-2">Success Response</h4>
+                <CodeBlock
+                  id="v1-contact-messages-get-success"
+                  code={`{
+  "messages": [
+    {
+      "id": 1,
+      "userId": 1,
+      "contactId": 123,
+      "phoneNumber": "919876543210",
+      "message": "Hello!",
+      "mediaUrl": null,
+      "mediaType": null,
+      "isFromMe": true,
+      "timestamp": "2025-01-15T10:30:00.000Z"
+    },
+    {
+      "id": 2,
+      "userId": 1,
+      "contactId": 123,
+      "phoneNumber": "919876543210",
+      "message": "How are you?",
+      "mediaUrl": null,
+      "mediaType": null,
+      "isFromMe": false,
+      "timestamp": "2025-01-15T10:31:00.000Z"
+    }
+  ]
+}`}
+                  language="json"
+                />
+                <p className="text-sm text-gray-400 mt-2">
+                  Returns last 100 messages in chronological order. <code className="text-blue-400">isFromMe</code> indicates if message was sent (true) or received (false).
+                </p>
+              </div>
+            </div>
+          </Section>
+
+          {/* Contact Messages - Save */}
+          <Section
+            id="v1-contact-messages-post"
+            title="Save Contact Message"
+            method="POST"
+            endpoint="/api/v1/contacts/messages"
+            description="Store a chat message for a specific contact (contact automatically created if doesn't exist)"
+          >
+            <div className="space-y-6">
+              <div>
+                <h4 className="font-semibold mb-2">Request Body</h4>
+                <CodeBlock
+                  id="v1-contact-messages-post-body"
+                  code={`{
+  "phoneNumber": "919876543210",     // Required
+  "message": "Hello from API",       // Optional: Text content
+  "mediaUrl": "https://...",         // Optional: Media file URL
+  "mediaType": "image",              // Optional: image, video, audio, document
+  "isFromMe": true                   // Optional: true (sent) or false (received), defaults to true
+}`}
+                  language="json"
+                />
+              </div>
+
+              <div>
+                <h4 className="font-semibold mb-2">Example Request</h4>
+                <MultiLanguageCodeBlock
+                  id="v1-contact-messages-post-examples"
+                  examples={[
+                    {
+                      lang: 'bash',
+                      label: 'cURL',
+                      code: `curl -X POST "${baseUrl}/api/v1/contacts/messages" \\
+  -H "Authorization: Bearer YOUR_API_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "phoneNumber": "919876543210",
+    "message": "Hello from API",
+    "isFromMe": true
+  }'`
+                    },
+                    {
+                      lang: 'javascript',
+                      label: 'JavaScript',
+                      code: `const response = await fetch(\`${baseUrl}/api/v1/contacts/messages\`, {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_TOKEN',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    phoneNumber: '919876543210',
+    message: 'Hello from API',
+    isFromMe: true
+  })
+});
+
+const data = await response.json();
+console.log('Saved message:', data.message);`
+                    },
+                    {
+                      lang: 'python',
+                      label: 'Python',
+                      code: `import requests
+
+url = f"${baseUrl}/api/v1/contacts/messages"
+headers = {
+    "Authorization": "Bearer YOUR_API_TOKEN",
+    "Content-Type": "application/json"
+}
+payload = {
+    "phoneNumber": "919876543210",
+    "message": "Hello from API",
+    "isFromMe": True
+}
+
+response = requests.post(url, headers=headers, json=payload)
+print("Saved:", response.json()["message"])`
+                    },
+                    {
+                      lang: 'php',
+                      label: 'PHP',
+                      code: `<?php
+
+$url = "${baseUrl}/api/v1/contacts/messages";
+$headers = [
+    "Authorization: Bearer YOUR_API_TOKEN",
+    "Content-Type: application/json"
+];
+$payload = json_encode([
+    "phoneNumber" => "919876543210",
+    "message" => "Hello from API",
+    "isFromMe" => true
+]);
+
+$ch = curl_init($url);
+curl_setopt($ch, CURLOPT_POST, true);
+curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+$response = curl_exec($ch);
+echo "Saved: " . $response;
+?>`
+                    }
+                  ]}
+                />
+              </div>
+
+              <div>
+                <h4 className="font-semibold mb-2">Success Response</h4>
+                <CodeBlock
+                  id="v1-contact-messages-post-success"
+                  code={`{
+  "message": {
+    "id": 3,
+    "userId": 1,
+    "contactId": 123,
+    "phoneNumber": "919876543210",
+    "message": "Hello from API",
+    "mediaUrl": null,
+    "mediaType": null,
+    "isFromMe": true,
+    "timestamp": "2025-01-15T10:35:00.000Z"
+  }
+}`}
+                  language="json"
+                />
+              </div>
+
+              <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4">
+                <p className="text-sm text-purple-400">
+                  <strong>💬 Use Case:</strong> This endpoint is useful for manually logging chat history, synchronizing messages from other systems, or storing messages sent through external channels. The contact is automatically created if it doesn't exist.
+                </p>
+              </div>
+            </div>
+          </Section>
         </div>
 
         {/* Best Practices */}

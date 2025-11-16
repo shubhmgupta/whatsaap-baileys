@@ -31,8 +31,13 @@ export default function SignIn() {
         if (data.user) {
           sessionStorage.setItem('user', JSON.stringify(data.user));
         }
-        // Redirect to dashboard
-        window.location.href = '/dashboard';
+        
+        // Check for redirect parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        const redirect = urlParams.get('redirect') || '/dashboard';
+        
+        // Redirect to intended page or dashboard
+        window.location.href = redirect;
       } else {
         setError(data.error || 'Sign in failed');
       }

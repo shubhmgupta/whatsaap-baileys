@@ -20,15 +20,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const appName = process.env.NEXT_PUBLIC_APP_NAME || 'Codefy';
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(true);
   const pathname = usePathname();
 
   useEffect(() => {
-    // Check if user is admin
+    // Check authentication
     const userString = sessionStorage.getItem('user');
-    if (userString) {
+    if (!userString) {
+      // No user found, redirect to signin
+      window.location.href = '/signin';
+      return;
+    }
+    
+    try {
       const user = JSON.parse(userString);
       setIsAdmin(user.role === 'admin');
+      setIsAuthenticated(true);
+    } catch (error) {
+      // Invalid user data, redirect to signin
+      sessionStorage.removeItem('user');
+      window.location.href = '/signin';
+      return;
     }
+    
+    setLoading(false);
   }, []);
 
   const navigation = [
@@ -41,6 +57,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   ];
 
   const isActive = (href: string) => pathname === href || pathname?.startsWith(href + '/');
+
+  // Show loading or nothing while checking authentication
+  if (loading || !isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-900 to-gray-800 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-900 to-gray-800">
