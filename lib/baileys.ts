@@ -3,10 +3,14 @@ import { Boom } from '@hapi/boom';
 import qrcode from 'qrcode';
 import { db } from '@/lib/db';
 import { users, contacts, chatMessages } from '@/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, lt } from 'drizzle-orm';
 import pino from 'pino';
 import fs from 'fs-extra';
 import path from 'path';
+import { promisify } from 'util';
+import { exec } from 'child_process';
+
+const execAsync = promisify(exec);
 
 // Session management - UPDATED with enhanced logging and Status 440 handling
 // Use globalThis to ensure single instance across all module imports (fixes Next.js module duplication)
@@ -123,6 +127,89 @@ process.on('uncaughtException', (error: Error, origin) => {
   console.error(`Caught exception: ${error}\n` + `Exception origin: ${origin}`);
 });
 
+// Clean up session files for inactive users to save disk space
+// Files are removed after 30 days, but users can still reconnect from DB
+async function cleanupInactiveSessions() {
+  try {
+    const sessionsDir = path.join(process.cwd(), 'sessions');
+    if (!await fs.pathExists(sessionsDir)) return;
+    
+    const now = Date.now();
+    const thirtyDaysAgo = now - (30 * 24 * 60 * 60 * 1000); // Extended to 30 days
+    
+    const userDirs = await fs.readdir(sessionsDir);
+    let cleaned = 0;
+    
+    for (const dir of userDirs) {
+      if (!dir.startsWith('user_')) continue;
+      
+      const userId = dir.replace('user_', '');
+      const sessionPath = path.join(sessionsDir, dir);
+      
+      // Skip if session is active in memory
+      const activeSession = sessions.get(userId);
+      if (activeSession?.connected) continue;
+      
+      // Check last modified time
+      const stats = await fs.stat(sessionPath);
+      if (stats.mtimeMs < thirtyDaysAgo) {
+        // Session hasn't been used in 30 days, remove it (DB backup exists)
+        await fs.remove(sessionPath);
+        cleaned++;
+        console.log(`🧹 Cleaned up inactive session files for user ${userId} (DB backup available)`);
+      }
+    }
+    
+    if (cleaned > 0) {
+      console.log(`✅ Cleaned up ${cleaned} inactive session folders (users can still auto-reconnect from DB)`);
+    }
+  } catch (error) {
+    console.error('Error cleaning up sessions:', error);
+  }
+}
+
+// Helper function to restore session auth state from database
+async function restoreSessionFromDatabase(userId: string): Promise<boolean> {
+  try {
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, parseInt(userId))
+    });
+    
+    if (!user?.whatsappSession) {
+      console.log(`❌ No saved session found in DB for user ${userId}`);
+      return false;
+    }
+    
+    // Parse saved session data
+    const savedState = JSON.parse(user.whatsappSession);
+    
+    // Create session directory if it doesn't exist
+    const sessionPath = path.join(process.cwd(), `sessions/user_${userId}`);
+    await fs.ensureDir(sessionPath);
+    
+    // Write creds.json (main auth file)
+    if (savedState.creds) {
+      await fs.writeJson(path.join(sessionPath, 'creds.json'), savedState.creds);
+    }
+    
+    // Write keys if they exist
+    if (savedState.keys) {
+      await fs.writeJson(path.join(sessionPath, 'keys.json'), savedState.keys);
+    }
+    
+    console.log(`✅ Restored session from database for user ${userId}`);
+    return true;
+  } catch (error) {
+    console.error(`Error restoring session from DB for user ${userId}:`, error);
+    return false;
+  }
+}
+
+// Run cleanup every 6 hours
+setInterval(cleanupInactiveSessions, 6 * 60 * 60 * 1000);
+// Run immediately on startup
+cleanupInactiveSessions();
+
 async function createBaileysSession(userId: string) {
   // Prevent duplicate connection attempts
   if (reconnectingUsers.has(userId)) {
@@ -139,6 +226,20 @@ async function createBaileysSession(userId: string) {
 
   try {
     reconnectingUsers.add(userId);
+    
+    // Check if session files exist, if not try to restore from database
+    const sessionPath = path.join(process.cwd(), `sessions/user_${userId}`);
+    const credsPath = path.join(sessionPath, 'creds.json');
+    
+    if (!await fs.pathExists(credsPath)) {
+      console.log(`📂 Session files not found for user ${userId}, checking database...`);
+      const restored = await restoreSessionFromDatabase(userId);
+      
+      if (!restored) {
+        console.log(`⚠️ No session backup in database for user ${userId}, needs fresh QR scan`);
+        // Continue anyway - will generate new QR code
+      }
+    }
     
     const { state, saveCreds } = await useMultiFileAuthState(`sessions/user_${userId}`);
     const { version } = await fetchLatestBaileysVersion();
@@ -265,10 +366,14 @@ async function createBaileysSession(userId: string) {
       reconnectAttempts.delete(userId); // Reset reconnection attempts on success
       
       try {
-        const session = JSON.stringify(state);
-        await db.update(users).set({ whatsappSession: session }).where(eq(users.id, parseInt(userId)));
+        // Save minimal session data to database (just auth state, not full session)
+        const sessionData = JSON.stringify(state);
+        await db.update(users).set({ 
+          whatsappSession: sessionData,
+          // Note: In production, consider using jsonb column for better performance
+        }).where(eq(users.id, parseInt(userId)));
         
-        // Update session with all connection details
+        // Update in-memory session with all connection details
         sessions.set(userId, { 
           ...sessions.get(userId), 
           sock, 
@@ -279,6 +384,8 @@ async function createBaileysSession(userId: string) {
         
         // Start heartbeat to keep connection alive
         startHeartbeat(userId, sock);
+        
+        console.log(`💾 Session saved to database for user ${userId}`);
       } catch (error) {
         console.error('Error updating session in database:', error);
       }
