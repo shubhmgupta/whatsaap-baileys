@@ -59,11 +59,43 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Message or file is required' }, { status: 400 });
     }
 
-    // Check connection WITHOUT creating new session (waitForQR=false)
-    const session = await getSession(user.id.toString(), false);
+    // First check if session exists in memory
+    let session = await getSession(user.id.toString(), false);
+    
+    // If not connected, try to restore from database and reconnect
+    if (!session || !session.connected || !session.sock?.user) {
+      console.log(`📡 Attempting to restore session for user ${user.id} before sending message...`);
+      
+      // Try to restore and connect (waitForQR=false means no QR generation, just restore)
+      session = await getSession(user.id.toString(), true);
+      
+      // Wait up to 15 seconds for connection to establish
+      if (session && !session.connected) {
+        await new Promise((resolve) => {
+          let attempts = 0;
+          const checkInterval = setInterval(() => {
+            const currentSession = session;
+            attempts++;
+            
+            if (currentSession?.connected && currentSession?.sock?.user) {
+              clearInterval(checkInterval);
+              resolve(true);
+            } else if (attempts >= 30) { // 30 * 500ms = 15 seconds
+              clearInterval(checkInterval);
+              resolve(false);
+            }
+          }, 500);
+        });
+        
+        // Refresh session after waiting
+        session = await getSession(user.id.toString(), false);
+      }
+    }
+    
+    // Final check - if still not connected, return error
     if (!session || !session.connected || !session.sock?.user) {
       return NextResponse.json({ 
-        error: 'WhatsApp not connected. Please scan QR code first.',
+        error: 'WhatsApp not connected. Unable to restore session. Please connect via dashboard.',
         needsQR: true 
       }, { status: 400 });
     }
