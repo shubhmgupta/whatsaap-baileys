@@ -32,8 +32,17 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
-    // Check if session is currently connecting/restoring from database
-    if (existingSession?.connecting) {
+    // Check if session is currently connecting/restoring and has QR
+    if (existingSession?.connecting && existingSession?.qr) {
+      return NextResponse.json({ 
+        qr: existingSession.qr,
+        status: 'qr_generated',
+        message: 'Scan QR code to connect'
+      }, { status: 200 });
+    }
+
+    // Check if session is restoring from database (connecting without QR)
+    if (existingSession?.connecting && !existingSession?.qr) {
       return NextResponse.json({ 
         message: 'Restoring session from database, please wait...',
         status: 'restoring',

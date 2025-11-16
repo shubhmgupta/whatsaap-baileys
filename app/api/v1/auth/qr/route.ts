@@ -47,45 +47,24 @@ export async function POST(request: Request) {
       }, { status: 400, headers: corsHeaders });
     }
 
-    // Check if currently connecting
-    if (existingSession?.connecting) {
-      // Check if QR exists
-      if (existingSession.qr) {
-        return NextResponse.json({ 
-          qr: existingSession.qr,
-          status: 'qr_generated',
-          message: 'Scan QR code to connect'
-        }, { headers: corsHeaders });
-      }
-      
+    // Check if currently connecting and has QR
+    if (existingSession?.connecting && existingSession?.qr) {
+      return NextResponse.json({ 
+        qr: existingSession.qr,
+        status: 'qr_generated',
+        message: 'Scan QR code to connect'
+      }, { headers: corsHeaders });
+    }
+
+    // Check if restoring session (connecting but no QR yet)
+    if (existingSession?.connecting && !existingSession?.qr) {
       return NextResponse.json({ 
         status: 'connecting',
         message: 'Connection in progress. Please wait...'
       }, { headers: corsHeaders });
     }
 
-    // Try to restore from database first (no QR generation)
-    console.log(`🔄 Checking for existing session backup for user ${userId}...`);
-    const restoredSession = await getSession(userId.toString(), false);
-    
-    // Wait a moment for restoration to complete
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Check if restored and connected
-    const checkSession = await getSession(userId.toString(), false);
-    if (checkSession?.connected && checkSession?.sock?.user) {
-      return NextResponse.json({ 
-        message: 'Connected successfully using saved session',
-        status: 'auto_connected',
-        connected: true,
-        user: {
-          id: checkSession.sock.user.id,
-          name: checkSession.sock.user.name
-        }
-      }, { headers: corsHeaders });
-    }
-
-    // If not restored, generate new QR code
+    // No existing session or session is disconnected - generate new QR
     console.log(`📱 Generating QR code for user ${userId}...`);
     const session = await getSession(userId.toString(), true);
     

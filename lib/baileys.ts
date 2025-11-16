@@ -351,25 +351,38 @@ async function createBaileysSession(userId: string) {
       if (shouldReconnect) {
         // Handle different disconnect reasons
         if (statusCode === DisconnectReason.connectionReplaced || statusCode === 401 || statusCode === 440) {
-          console.log('⚠️ Connection replaced/conflict (Status 440/401). This means WhatsApp is open elsewhere.');
+          console.log('⚠️ Connection replaced/conflict (Status 440/401). Invalid credentials - clearing session.');
           
-          // Keep a minimal session object so future updates can find it
-          // This prevents ghost updates from failing
-          const currentSession = sessions.get(userId);
-          
-          sessions.set(userId, {
-            connected: false,
-            sock: null,
-            needsQR: true,
-            lastDisconnect: new Date(),
-            qr: currentSession?.qr // Preserve QR if it exists
-          });
+          // Clear session completely to force new QR generation
+          sessions.delete(userId);
+          messageStore.delete(userId);
+          qrResolvers.delete(userId);
           
           stopHeartbeat(userId);
           reconnectingUsers.delete(userId);
           reconnectAttempts.delete(userId);
           
-          console.log('🧹 Session marked disconnected. User must scan QR code again.');
+          // Clear session files and database async (non-blocking)
+          (async () => {
+            try {
+              const sessionDir = path.join(process.cwd(), `sessions/user_${userId}`);
+              await fs.remove(sessionDir);
+              console.log(`🗑️ Session files deleted for user ${userId}`);
+            } catch (err) {
+              console.error('Failed to remove session directory:', err);
+            }
+            
+            try {
+              await db.update(users).set({ 
+                whatsappSession: null
+              }).where(eq(users.id, parseInt(userId)));
+              console.log(`🗑️ Database session backup cleared for user ${userId}`);
+            } catch (error) {
+              console.error('Failed to clear database session:', error);
+            }
+          })();
+          
+          console.log('🧹 Session completely cleared. User must scan new QR code.');
           return;
         }
 

@@ -186,14 +186,23 @@ export default function Dashboard() {
           case 'connecting':
             // Session is being restored from database
             setSuccess('🔄 Restoring session from database, please wait...');
-            // Poll for connection status
+            // Poll for connection status with timeout
+            let pollCount = 0;
+            const maxPolls = 15; // 30 seconds max (15 polls * 2 seconds)
             const restoreInterval = setInterval(async () => {
               try {
-                const statusRes = await fetch(`/api/auth/status?userId=${user?.id || 1}`);
-                if (statusRes.ok) {
-                  const statusData = await statusRes.json();
-                  console.log('Status check:', statusData);
-                  if (statusData.connected) {
+                pollCount++;
+                // Check QR endpoint for updates (may have new QR if restoration failed)
+                const qrRes = await fetch('/api/auth/qr', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ userId: user?.id || 1 }),
+                });
+                
+                if (qrRes.ok) {
+                  const qrData = await qrRes.json();
+                  
+                  if (qrData.status === 'auto_connected' || qrData.connected) {
                     setConnected(true);
                     setQrCode('');
                     setSuccess('✅ WhatsApp connected successfully!');
@@ -201,10 +210,27 @@ export default function Dashboard() {
                     if (user?.id) {
                       loadContacts(user.id);
                     }
+                  } else if (qrData.status === 'qr_generated' && qrData.qr) {
+                    // New QR generated (restoration failed, showing new QR)
+                    setQrCode(qrData.qr);
+                    setSuccess('📱 Scan QR code with WhatsApp to connect');
+                    clearInterval(restoreInterval);
+                    // Start QR polling instead
+                    startQrPolling();
+                  } else if (!qrData.connecting && qrData.status !== 'restoring' || pollCount >= maxPolls) {
+                    // No longer connecting or timeout - restoration failed
+                    clearInterval(restoreInterval);
+                    setError('⚠️ Session restoration failed. Please generate a new QR code.');
+                    setConnected(false);
+                    setQrCode('');
                   }
                 }
               } catch (err) {
                 console.error('Status check error:', err);
+                if (pollCount >= maxPolls) {
+                  clearInterval(restoreInterval);
+                  setError('⚠️ Connection timeout. Please try again.');
+                }
               }
             }, 2000);
             (window as any).statusCheckInterval = restoreInterval;
@@ -219,28 +245,44 @@ export default function Dashboard() {
             setManuallyDisconnected(false);
             sessionStorage.removeItem('manuallyDisconnected');
             
-            // Poll for connection status
-            const qrInterval = setInterval(async () => {
-              try {
-                const statusRes = await fetch(`/api/auth/status?userId=${user?.id || 1}`);
-                if (statusRes.ok) {
-                  const statusData = await statusRes.json();
-                  console.log('Status check:', statusData);
-                  if (statusData.connected) {
-                    setConnected(true);
-                    setQrCode('');
-                    setSuccess('✅ WhatsApp connected successfully!');
-                    clearInterval(qrInterval);
-                    if (user?.id) {
-                      loadContacts(user.id);
+            // Poll for connection status and QR updates
+            const startQrPolling = () => {
+              const qrInterval = setInterval(async () => {
+                try {
+                  // Fetch QR endpoint to get updated QR code
+                  const qrRes = await fetch('/api/auth/qr', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: user?.id || 1 }),
+                  });
+                  
+                  if (qrRes.ok) {
+                    const qrData = await qrRes.json();
+                    
+                    if (qrData.status === 'auto_connected' || qrData.connected) {
+                      setConnected(true);
+                      setQrCode('');
+                      setSuccess('✅ WhatsApp connected successfully!');
+                      clearInterval(qrInterval);
+                      if (user?.id) {
+                        loadContacts(user.id);
+                      }
+                    } else if (qrData.status === 'qr_generated' && qrData.qr) {
+                      // Update QR code if it changed (WhatsApp generates new QR periodically)
+                      if (qrData.qr !== qrCode) {
+                        console.log('📱 QR code updated');
+                        setQrCode(qrData.qr);
+                      }
                     }
                   }
+                } catch (err) {
+                  console.error('QR polling error:', err);
                 }
-              } catch (err) {
-                console.error('Status check error:', err);
-              }
-            }, 2000);
-            (window as any).statusCheckInterval = qrInterval;
+              }, 3000); // Poll every 3 seconds
+              (window as any).statusCheckInterval = qrInterval;
+            };
+            
+            startQrPolling();
             break;
 
           default:
