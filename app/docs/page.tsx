@@ -33,11 +33,11 @@ export default function PublicDocsPage() {
 
   const codeExamples = {
     qrConnect: {
-      curl: `curl -X GET https://yourapi.com/api/whatsapp/qr \\
+      curl: `curl -X POST https://yourapi.com/api/v1/auth/qr \\
   -H "Authorization: Bearer YOUR_API_TOKEN"`,
       javascript: `// Connect to WhatsApp using QR Code
-const response = await fetch('https://yourapi.com/api/whatsapp/qr', {
-  method: 'GET',
+const response = await fetch('https://yourapi.com/api/v1/auth/qr', {
+  method: 'POST',
   headers: {
     'Authorization': 'Bearer YOUR_API_TOKEN'
   }
@@ -50,24 +50,25 @@ console.log('QR Code:', data.qr);
       python: `import requests
 
 # Connect to WhatsApp using QR Code
-url = "https://yourapi.com/api/whatsapp/qr"
+url = "https://yourapi.com/api/v1/auth/qr"
 headers = {
     "Authorization": "Bearer YOUR_API_TOKEN"
 }
 
-response = requests.get(url, headers=headers)
+response = requests.post(url, headers=headers)
 data = response.json()
 
 print("QR Code:", data["qr"])
 # Display QR code for user to scan with WhatsApp mobile app`,
       php: `<?php
 // Connect to WhatsApp using QR Code
-$url = "https://yourapi.com/api/whatsapp/qr";
+$url = "https://yourapi.com/api/v1/auth/qr";
 $headers = [
     "Authorization: Bearer YOUR_API_TOKEN"
 ];
 
 $ch = curl_init($url);
+curl_setopt($ch, CURLOPT_POST, true);
 curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 
@@ -79,10 +80,10 @@ echo "QR Code: " . $data["qr"];
 ?>`,
     },
     checkStatus: {
-      curl: `curl -X GET https://yourapi.com/api/whatsapp/status \\
+      curl: `curl -X GET https://yourapi.com/api/v1/auth/status \\
   -H "Authorization: Bearer YOUR_API_TOKEN"`,
       javascript: `// Check WhatsApp connection status
-const response = await fetch('https://yourapi.com/api/whatsapp/status', {
+const response = await fetch('https://yourapi.com/api/v1/auth/status', {
   method: 'GET',
   headers: {
     'Authorization': 'Bearer YOUR_API_TOKEN'
@@ -95,7 +96,7 @@ console.log('Connected:', data.connected);`,
       python: `import requests
 
 # Check WhatsApp connection status
-url = "https://yourapi.com/api/whatsapp/status"
+url = "https://yourapi.com/api/v1/auth/status"
 headers = {
     "Authorization": "Bearer YOUR_API_TOKEN"
 }
@@ -107,7 +108,7 @@ print(f"Status: {data['status']}")
 print(f"Connected: {data['connected']}")`,
       php: `<?php
 // Check WhatsApp connection status
-$url = "https://yourapi.com/api/whatsapp/status";
+$url = "https://yourapi.com/api/v1/auth/status";
 $headers = [
     "Authorization: Bearer YOUR_API_TOKEN"
 ];
@@ -124,7 +125,7 @@ echo "Connected: " . ($data["connected"] ? "Yes" : "No");
 ?>`,
     },
     sendText: {
-      curl: `curl -X POST https://yourapi.com/api/message/send \\
+      curl: `curl -X POST https://yourapi.com/api/v1/message/send \\
   -H "Authorization: Bearer YOUR_API_TOKEN" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -132,7 +133,7 @@ echo "Connected: " . ($data["connected"] ? "Yes" : "No");
     "message": "Hello from WhatsApp API!"
   }'`,
       javascript: `// Send text message
-const response = await fetch('https://yourapi.com/api/message/send', {
+const response = await fetch('https://yourapi.com/api/v1/message/send', {
   method: 'POST',
   headers: {
     'Authorization': 'Bearer YOUR_API_TOKEN',
@@ -149,7 +150,7 @@ console.log('Message sent:', data);`,
       python: `import requests
 
 # Send text message
-url = "https://yourapi.com/api/message/send"
+url = "https://yourapi.com/api/v1/message/send"
 headers = {
     "Authorization": "Bearer YOUR_API_TOKEN",
     "Content-Type": "application/json"
@@ -165,7 +166,7 @@ data = response.json()
 print("Message sent:", data)`,
       php: `<?php
 // Send text message
-$url = "https://yourapi.com/api/message/send";
+$url = "https://yourapi.com/api/v1/message/send";
 $headers = [
     "Authorization: Bearer YOUR_API_TOKEN",
     "Content-Type: application/json"
@@ -186,7 +187,7 @@ echo "Message sent: " . $response;
 ?>`,
     },
     sendImage: {
-      curl: `curl -X POST https://yourapi.com/api/message/send \\
+      curl: `curl -X POST https://yourapi.com/api/v1/message/send \\
   -H "Authorization: Bearer YOUR_API_TOKEN" \\
   -F "phoneNumber=919876543210" \\
   -F "message=Check out this image!" \\
@@ -197,7 +198,7 @@ formData.append('phoneNumber', '919876543210');
 formData.append('message', 'Check out this image!');
 formData.append('file', imageFile); // File object from input
 
-const response = await fetch('https://yourapi.com/api/message/send', {
+const response = await fetch('https://yourapi.com/api/v1/message/send', {
   method: 'POST',
   headers: {
     'Authorization': 'Bearer YOUR_API_TOKEN'
@@ -210,7 +211,7 @@ console.log('Image sent:', data);`,
       python: `import requests
 
 # Send image with caption
-url = "https://yourapi.com/api/message/send"
+url = "https://yourapi.com/api/v1/message/send"
 headers = {
     "Authorization": "Bearer YOUR_API_TOKEN"
 }
@@ -226,7 +227,7 @@ response = requests.post(url, headers=headers, files=files, data=data)
 print("Image sent:", response.json())`,
       php: `<?php
 // Send image with caption
-$url = "https://yourapi.com/api/message/send";
+$url = "https://yourapi.com/api/v1/message/send";
 $headers = [
     "Authorization: Bearer YOUR_API_TOKEN"
 ];
@@ -246,7 +247,7 @@ echo "Image sent: " . $response;
 ?>`,
     },
     sendDocument: {
-      curl: `curl -X POST https://yourapi.com/api/message/send \\
+      curl: `curl -X POST https://yourapi.com/api/v1/message/send \\
   -H "Authorization: Bearer YOUR_API_TOKEN" \\
   -F "phoneNumber=919876543210" \\
   -F "message=Here is the document you requested" \\
@@ -257,7 +258,7 @@ formData.append('phoneNumber', '919876543210');
 formData.append('message', 'Here is the document you requested');
 formData.append('file', pdfFile); // File object
 
-const response = await fetch('https://yourapi.com/api/message/send', {
+const response = await fetch('https://yourapi.com/api/v1/message/send', {
   method: 'POST',
   headers: {
     'Authorization': 'Bearer YOUR_API_TOKEN'
@@ -270,7 +271,7 @@ console.log('Document sent:', data);`,
       python: `import requests
 
 # Send PDF document
-url = "https://yourapi.com/api/message/send"
+url = "https://yourapi.com/api/v1/message/send"
 headers = {
     "Authorization": "Bearer YOUR_API_TOKEN"
 }
@@ -286,7 +287,7 @@ response = requests.post(url, headers=headers, files=files, data=data)
 print("Document sent:", response.json())`,
       php: `<?php
 // Send PDF document
-$url = "https://yourapi.com/api/message/send";
+$url = "https://yourapi.com/api/v1/message/send";
 $headers = [
     "Authorization: Bearer YOUR_API_TOKEN"
 ];
@@ -454,7 +455,7 @@ foreach ($contacts as $contact) {
             <div className="flex items-center gap-3 mb-4">
               <QrCode className="w-6 h-6 text-green-500" />
               <span className="bg-blue-500 text-white text-sm font-bold px-3 py-1 rounded">GET</span>
-              <code className="text-blue-400 text-lg">/api/whatsapp/qr</code>
+              <code className="text-blue-400 text-lg">/api/v1/auth/qr</code>
             </div>
             <p className="text-gray-300 mb-6">Generate QR code to connect your WhatsApp account. User scans this with their WhatsApp mobile app.</p>
             
@@ -482,7 +483,7 @@ foreach ($contacts as $contact) {
           <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700/50 p-8">
             <div className="flex items-center gap-3 mb-4">
               <span className="bg-blue-500 text-white text-sm font-bold px-3 py-1 rounded">GET</span>
-              <code className="text-blue-400 text-lg">/api/whatsapp/status</code>
+              <code className="text-blue-400 text-lg">/api/v1/auth/status</code>
             </div>
             <p className="text-gray-300 mb-6">Check your WhatsApp connection status</p>
             
@@ -504,7 +505,7 @@ foreach ($contacts as $contact) {
             <div className="flex items-center gap-3 mb-4">
               <Send className="w-6 h-6 text-green-500" />
               <span className="bg-green-500 text-white text-sm font-bold px-3 py-1 rounded">POST</span>
-              <code className="text-blue-400 text-lg">/api/message/send</code>
+              <code className="text-blue-400 text-lg">/api/v1/message/send</code>
             </div>
             <p className="text-gray-300 mb-6">Send a text message to a WhatsApp number</p>
             
@@ -538,7 +539,7 @@ foreach ($contacts as $contact) {
             <div className="flex items-center gap-3 mb-4">
               <Image className="w-6 h-6 text-purple-500" />
               <span className="bg-green-500 text-white text-sm font-bold px-3 py-1 rounded">POST</span>
-              <code className="text-blue-400 text-lg">/api/message/send</code>
+              <code className="text-blue-400 text-lg">/api/v1/message/send</code>
             </div>
             <p className="text-gray-300 mb-6">Send an image with optional caption</p>
             
@@ -576,7 +577,7 @@ foreach ($contacts as $contact) {
             <div className="flex items-center gap-3 mb-4">
               <FileText className="w-6 h-6 text-orange-500" />
               <span className="bg-green-500 text-white text-sm font-bold px-3 py-1 rounded">POST</span>
-              <code className="text-blue-400 text-lg">/api/message/send</code>
+              <code className="text-blue-400 text-lg">/api/v1/message/send</code>
             </div>
             <p className="text-gray-300 mb-6">Send a document (PDF, DOC, XLS, etc.) or video/audio files</p>
             
@@ -653,7 +654,7 @@ foreach ($contacts as $contact) {
               <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-r from-green-500 to-blue-500 text-white flex items-center justify-center font-bold text-sm">2</div>
               <div>
                 <h3 className="font-semibold text-white mb-1">Request QR code via API</h3>
-                <p className="text-gray-400">Call <code className="text-blue-400">GET /api/whatsapp/qr</code> to generate a QR code for WhatsApp connection.</p>
+                <p className="text-gray-400">Call <code className="text-blue-400">POST /api/v1/auth/qr</code> to generate a QR code for WhatsApp connection.</p>
               </div>
             </div>
             <div className="flex gap-3">
@@ -674,14 +675,14 @@ foreach ($contacts as $contact) {
               <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-r from-green-500 to-blue-500 text-white flex items-center justify-center font-bold text-sm">5</div>
               <div>
                 <h3 className="font-semibold text-white mb-1">Verify connection status</h3>
-                <p className="text-gray-400">Poll <code className="text-blue-400">GET /api/whatsapp/status</code> to confirm connection is active.</p>
+                <p className="text-gray-400">Poll <code className="text-blue-400">GET /api/v1/auth/status</code> to confirm connection is active.</p>
               </div>
             </div>
             <div className="flex gap-3">
               <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-r from-green-500 to-blue-500 text-white flex items-center justify-center font-bold text-sm">6</div>
               <div>
                 <h3 className="font-semibold text-white mb-1">Start sending messages</h3>
-                <p className="text-gray-400">Use <code className="text-blue-400">POST /api/message/send</code> to send text, images, documents, videos, or audio files.</p>
+                <p className="text-gray-400">Use <code className="text-blue-400">POST /api/v1/message/send</code> to send text, images, documents, videos, or audio files.</p>
               </div>
             </div>
           </div>

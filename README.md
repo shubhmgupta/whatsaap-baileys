@@ -66,9 +66,49 @@ Open [http://localhost:3000](http://localhost:3000) to see the application.
 
 ## 📚 Documentation
 
-Complete API documentation is available at:
+We provide comprehensive documentation to get you started quickly:
 
-- **Markdown**: See [API-DOCUMENTATION.md](./API-DOCUMENTATION.md) for detailed API reference
+### 🚀 Getting Started
+- **[Quick Start Guide](./QUICKSTART.md)** - Get up and running in 5 minutes with curl examples
+- **[Complete Workflow Guide](./WORKFLOW_GUIDE.md)** - Step-by-step guide for all scenarios (connect → send → disconnect)
+
+### 📖 Technical Documentation  
+- **[Web UI Documentation](http://localhost:3000/dashboard/docs)** - Interactive API docs with curl examples for every endpoint
+- **[Sessions & Storage Architecture](./SESSIONS_STORAGE.md)** - How session management works, cleanup, and capacity planning
+- **[Auto-Restore Flow](./AUTO_RESTORE_FLOW.md)** - Visual guide for database-first restoration
+- **[Frontend Integration Guide](./FRONTEND_FLOW.md)** - User experience scenarios and UI states
+
+### 🧪 Testing
+- **[Auto-Restore Testing Guide](./TEST_AUTO_RESTORE.md)** - Checklist for testing session restoration
+
+### 🔑 Quick API Reference
+```bash
+# Auto-restore (no QR needed if previously connected)
+curl -X POST http://localhost:3000/api/auth/restore -d '{"userId": 1}'
+
+# Generate QR code
+curl -X POST http://localhost:3000/api/auth/qr -d '{"userId": 1}'
+
+# Check status
+curl -X GET "http://localhost:3000/api/auth/status?userId=1"
+
+# Send message
+curl -X POST http://localhost:3000/api/message/send \
+  -H "Content-Type: application/json" \
+  -d '{"userId": 1, "phoneNumber": "1234567890", "message": "Hello!"}'
+
+# Send media
+curl -X POST http://localhost:3000/api/message/send \
+  -F "userId=1" \
+  -F "phoneNumber=1234567890" \
+  -F "message=Check this out!" \
+  -F "file=@image.jpg"
+
+# Disconnect
+curl -X POST http://localhost:3000/api/auth/logout -d '{"userId": 1}'
+```
+
+For complete API documentation with all endpoints, visit `/dashboard/docs` in your browser or read [WORKFLOW_GUIDE.md](./WORKFLOW_GUIDE.md)
 
 ## 🏗️ Tech Stack
 
