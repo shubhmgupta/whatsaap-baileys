@@ -23,10 +23,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // Use user ID as session identifier
-    const session = await getSession(user.id.toString());
+    // First check if already connected - don't generate new QR
+    const existingSession = await getSession(user.id.toString(), false);
+    if (existingSession?.connected && existingSession?.sock?.user) {
+      return NextResponse.json({ error: 'Already connected to WhatsApp' }, { status: 400 });
+    }
 
-    if (!session.qr) {
+    // Use user ID as session identifier - pass waitForQR=true to create new session
+    const session = await getSession(user.id.toString(), true);
+
+    if (!session || !session.qr) {
       return NextResponse.json({ error: 'Failed to generate QR code. Please try again.' }, { status: 500 });
     }
 

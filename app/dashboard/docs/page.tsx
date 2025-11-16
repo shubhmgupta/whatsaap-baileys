@@ -281,199 +281,6 @@ console.log(response.data);`
 }`
     },
     {
-      id: 'create-contact',
-      title: 'Create Contact',
-      method: 'POST',
-      endpoint: '/api/contacts',
-      description: 'Add a new contact to your list',
-      auth: 'Required (Bearer token)',
-      parameters: [
-        { name: 'userId', type: 'number', required: true, description: 'Your user ID' },
-        { name: 'phoneNumber', type: 'string', required: true, description: 'Phone number with country code' },
-        { name: 'name', type: 'string', required: true, description: 'Contact name' },
-      ],
-      examples: {
-        php: `<?php
-$curl = curl_init();
-
-$data = json_encode([
-    'userId' => 1,
-    'phoneNumber' => '919876543210',
-    'name' => 'John Doe'
-]);
-
-curl_setopt_array($curl, [
-    CURLOPT_URL => '${baseUrl}/api/contacts',
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_POST => true,
-    CURLOPT_POSTFIELDS => $data,
-    CURLOPT_HTTPHEADER => [
-        'Authorization: Bearer YOUR_API_TOKEN',
-        'Content-Type: application/json'
-    ],
-]);
-
-$response = curl_exec($curl);
-$result = json_decode($response, true);
-
-curl_close($curl);
-print_r($result);
-?>`,
-        python: `import requests
-import json
-
-url = '${baseUrl}/api/contacts'
-headers = {
-    'Authorization': 'Bearer YOUR_API_TOKEN',
-    'Content-Type': 'application/json'
-}
-data = {
-    'userId': 1,
-    'phoneNumber': '919876543210',
-    'name': 'John Doe'
-}
-
-response = requests.post(url, headers=headers, json=data)
-print(response.json())`,
-        javascript: `// Using Fetch API
-const response = await fetch('${baseUrl}/api/contacts', {
-  method: 'POST',
-  headers: {
-    'Authorization': 'Bearer YOUR_API_TOKEN',
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify({
-    userId: 1,
-    phoneNumber: '919876543210',
-    name: 'John Doe'
-  })
-});
-
-const data = await response.json();
-console.log(data);
-
-// Using Axios
-const axios = require('axios');
-
-const response = await axios.post('${baseUrl}/api/contacts', {
-  userId: 1,
-  phoneNumber: '919876543210',
-  name: 'John Doe'
-}, {
-  headers: {
-    'Authorization': 'Bearer YOUR_API_TOKEN'
-  }
-});
-console.log(response.data);`
-      },
-      response: `{
-  "id": 1,
-  "userId": 1,
-  "phoneNumber": "919876543210",
-  "name": "John Doe",
-  "lastMessageAt": null,
-  "createdAt": "2024-01-15T10:30:00.000Z"
-}`
-    },
-    {
-      id: 'get-messages',
-      title: 'Get Chat Messages',
-      method: 'GET',
-      endpoint: '/api/contacts/[id]/messages',
-      description: 'Get message history with a specific contact',
-      auth: 'Required (userId query param)',
-      parameters: [
-        { name: 'id', type: 'number', required: true, description: 'Contact ID (in URL path)' },
-        { name: 'userId', type: 'number', required: true, description: 'Your user ID' },
-      ],
-      examples: {
-        php: `<?php
-$curl = curl_init();
-
-$contactId = 1;
-$userId = 1;
-
-curl_setopt_array($curl, [
-    CURLOPT_URL => '${baseUrl}/api/contacts/' . $contactId . '/messages?userId=' . $userId,
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_HTTPHEADER => [
-        'Authorization: Bearer YOUR_API_TOKEN'
-    ],
-]);
-
-$response = curl_exec($curl);
-$data = json_decode($response, true);
-
-curl_close($curl);
-print_r($data);
-?>`,
-        python: `import requests
-
-contact_id = 1
-user_id = 1
-
-url = f'${baseUrl}/api/contacts/{contact_id}/messages'
-headers = {
-    'Authorization': 'Bearer YOUR_API_TOKEN'
-}
-params = {
-    'userId': user_id
-}
-
-response = requests.get(url, headers=headers, params=params)
-data = response.json()
-
-for message in data['messages']:
-    sender = 'You' if message['isFromMe'] else 'Contact'
-    print(f"{sender}: {message['message']}")`,
-        javascript: `// Using Fetch API
-const contactId = 1;
-const userId = 1;
-
-const response = await fetch(\`${baseUrl}/api/contacts/\${contactId}/messages?userId=\${userId}\`, {
-  headers: {
-    'Authorization': 'Bearer YOUR_API_TOKEN'
-  }
-});
-
-const data = await response.json();
-console.log(data);
-
-// Using Axios
-const axios = require('axios');
-
-const response = await axios.get(\`${baseUrl}/api/contacts/\${contactId}/messages\`, {
-  headers: {
-    'Authorization': 'Bearer YOUR_API_TOKEN'
-  },
-  params: {
-    userId: userId
-  }
-});
-console.log(response.data);`
-      },
-      response: `{
-  "messages": [
-    {
-      "id": 1,
-      "message": "Hello!",
-      "mediaUrl": null,
-      "mediaType": null,
-      "isFromMe": true,
-      "timestamp": "2024-01-15T10:30:00.000Z"
-    },
-    {
-      "id": 2,
-      "message": "Hi there!",
-      "mediaUrl": "https://example.com/image.jpg",
-      "mediaType": "image",
-      "isFromMe": false,
-      "timestamp": "2024-01-15T10:31:00.000Z"
-    }
-  ]
-}`
-    },
-    {
       id: 'connection-status',
       title: 'Check Connection Status',
       method: 'GET',
@@ -538,6 +345,259 @@ console.log(response.data.connected ? 'Connected' : 'Not Connected');`
       },
       response: `{
   "connected": true
+}`
+    },
+    {
+      id: 'get-qr',
+      title: 'Get QR Code',
+      method: 'GET',
+      endpoint: '/api/auth/qr',
+      description: 'Get QR code for WhatsApp connection',
+      auth: 'Required (userId query param)',
+      parameters: [
+        { name: 'userId', type: 'number', required: true, description: 'Your user ID' },
+      ],
+      examples: {
+        php: `<?php
+$curl = curl_init();
+
+curl_setopt_array($curl, [
+    CURLOPT_URL => '${baseUrl}/api/auth/qr?userId=1',
+    CURLOPT_RETURNTRANSFER => true,
+]);
+
+$response = curl_exec($curl);
+$data = json_decode($response, true);
+
+curl_close($curl);
+
+if (isset($data['qr'])) {
+    echo '<img src="' . $data['qr'] . '" />';
+} else {
+    echo $data['message'];
+}
+?>`,
+        python: `import requests
+
+url = '${baseUrl}/api/auth/qr'
+params = {'userId': 1}
+
+response = requests.get(url, params=params)
+data = response.json()
+
+if 'qr' in data:
+    print(f"QR Code: {data['qr']}")
+else:
+    print(data['message'])`,
+        javascript: `// Using Fetch API
+const response = await fetch('${baseUrl}/api/auth/qr?userId=1');
+const data = await response.json();
+
+if (data.qr) {
+  // Display QR code image
+  const img = document.createElement('img');
+  img.src = data.qr;
+  document.body.appendChild(img);
+} else {
+  console.log(data.message);
+}`
+      },
+      response: `{
+  "qr": "data:image/png;base64,iVBORw0KG..."
+}`
+    },
+    {
+      id: 'disconnect-whatsapp',
+      title: 'Disconnect WhatsApp',
+      method: 'POST',
+      endpoint: '/api/whatsapp/disconnect',
+      description: 'Disconnect WhatsApp session',
+      auth: 'Required (Bearer token)',
+      parameters: [
+        { name: 'userId', type: 'number', required: true, description: 'Your user ID' },
+      ],
+      examples: {
+        php: `<?php
+$curl = curl_init();
+
+$data = json_encode(['userId' => 1]);
+
+curl_setopt_array($curl, [
+    CURLOPT_URL => '${baseUrl}/api/whatsapp/disconnect',
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_POST => true,
+    CURLOPT_POSTFIELDS => $data,
+    CURLOPT_HTTPHEADER => [
+        'Authorization: Bearer YOUR_API_TOKEN',
+        'Content-Type: application/json'
+    ],
+]);
+
+$response = curl_exec($curl);
+curl_close($curl);
+?>`,
+        python: `import requests
+
+url = '${baseUrl}/api/whatsapp/disconnect'
+headers = {
+    'Authorization': 'Bearer YOUR_API_TOKEN',
+    'Content-Type': 'application/json'
+}
+data = {'userId': 1}
+
+response = requests.post(url, headers=headers, json=data)
+print(response.json())`,
+        javascript: `const response = await fetch('${baseUrl}/api/whatsapp/disconnect', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_TOKEN',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({ userId: 1 })
+});
+
+const data = await response.json();
+console.log(data);`
+      },
+      response: `{
+  "message": "WhatsApp disconnected successfully"
+}`
+    },
+    {
+      id: 'import-contacts',
+      title: 'Import Contacts from CSV',
+      method: 'POST',
+      endpoint: '/api/contacts/import',
+      description: 'Bulk import contacts from CSV file',
+      auth: 'Required (Bearer token)',
+      parameters: [
+        { name: 'userId', type: 'number', required: true, description: 'Your user ID' },
+        { name: 'file', type: 'File', required: true, description: 'CSV file with name and phoneNumber columns' },
+      ],
+      examples: {
+        php: `<?php
+$curl = curl_init();
+
+$postFields = [
+    'userId' => 1,
+    'file' => new CURLFile('/path/to/contacts.csv')
+];
+
+curl_setopt_array($curl, [
+    CURLOPT_URL => '${baseUrl}/api/contacts/import',
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_POST => true,
+    CURLOPT_POSTFIELDS => $postFields,
+    CURLOPT_HTTPHEADER => [
+        'Authorization: Bearer YOUR_API_TOKEN'
+    ],
+]);
+
+$response = curl_exec($curl);
+curl_close($curl);
+?>`,
+        python: `import requests
+
+url = '${baseUrl}/api/contacts/import'
+headers = {'Authorization': 'Bearer YOUR_API_TOKEN'}
+
+files = {'file': open('/path/to/contacts.csv', 'rb')}
+data = {'userId': 1}
+
+response = requests.post(url, headers=headers, data=data, files=files)
+print(response.json())`,
+        javascript: `const formData = new FormData();
+formData.append('userId', '1');
+formData.append('file', fileInput.files[0]);
+
+const response = await fetch('${baseUrl}/api/contacts/import', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_TOKEN'
+  },
+  body: formData
+});
+
+const data = await response.json();
+console.log(data);`
+      },
+      response: `{
+  "success": true,
+  "imported": 25,
+  "failed": 0
+}`
+    },
+    {
+      id: 'get-incoming-messages',
+      title: 'Get Incoming Messages',
+      method: 'GET',
+      endpoint: '/api/messages/incoming',
+      description: 'Fetch incoming messages with optional filters',
+      auth: 'Required (userId query param)',
+      parameters: [
+        { name: 'userId', type: 'number', required: true, description: 'Your user ID' },
+        { name: 'phoneNumber', type: 'string', required: false, description: 'Filter by phone number' },
+        { name: 'limit', type: 'number', required: false, description: 'Number of messages (default: 50)' },
+      ],
+      examples: {
+        php: `<?php
+$curl = curl_init();
+
+$params = http_build_query([
+    'userId' => 1,
+    'phoneNumber' => '919876543210',
+    'limit' => 20
+]);
+
+curl_setopt_array($curl, [
+    CURLOPT_URL => '${baseUrl}/api/messages/incoming?' . $params,
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_HTTPHEADER => [
+        'Authorization: Bearer YOUR_API_TOKEN'
+    ],
+]);
+
+$response = curl_exec($curl);
+curl_close($curl);
+?>`,
+        python: `import requests
+
+url = '${baseUrl}/api/messages/incoming'
+headers = {'Authorization': 'Bearer YOUR_API_TOKEN'}
+params = {
+    'userId': 1,
+    'phoneNumber': '919876543210',
+    'limit': 20
+}
+
+response = requests.get(url, headers=headers, params=params)
+print(response.json())`,
+        javascript: `const params = new URLSearchParams({
+  userId: '1',
+  phoneNumber: '919876543210',
+  limit: '20'
+});
+
+const response = await fetch(\`${baseUrl}/api/messages/incoming?\${params}\`, {
+  headers: {
+    'Authorization': 'Bearer YOUR_API_TOKEN'
+  }
+});
+
+const data = await response.json();
+console.log(data);`
+      },
+      response: `{
+  "messages": [
+    {
+      "id": 1,
+      "message": "Hello!",
+      "isFromMe": false,
+      "timestamp": "2024-01-15T10:30:00.000Z",
+      "mediaType": null,
+      "mediaUrl": null
+    }
+  ]
 }`
     },
   ];

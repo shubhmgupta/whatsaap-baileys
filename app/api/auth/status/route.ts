@@ -12,8 +12,8 @@ export async function GET(request: Request) {
 
         const session = await getSession(userId);
         
-        // Check if socket exists and is connected
-        const connected = !!(session?.connected || session?.sock?.user);
+        // STRICT validation: Both conditions must be true
+        const connected = !!(session?.connected && session?.sock?.user);
         const hasSocket = !!session?.sock;
         const isConnecting = session?.connecting || false;
         

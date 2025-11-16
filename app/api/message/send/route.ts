@@ -19,11 +19,26 @@ export async function POST(request: Request) {
     const token = request.headers.get('Authorization')?.split(' ')[1];
     const userFromToken = token ? await getUserByToken(token) : null;
 
-    const formData = await request.formData();
-    const userId = formData.get('userId') as string;
-    const phoneNumber = formData.get('phoneNumber') as string;
-    const message = formData.get('message') as string;
-    const file = formData.get('file') as File | null;
+    const contentType = request.headers.get('content-type') || '';
+    let userId: string;
+    let phoneNumber: string;
+    let message: string;
+    let file: File | null = null;
+
+    // Handle both FormData and JSON
+    if (contentType.includes('multipart/form-data') || contentType.includes('application/x-www-form-urlencoded')) {
+      const formData = await request.formData();
+      userId = formData.get('userId') as string;
+      phoneNumber = formData.get('phoneNumber') as string;
+      message = formData.get('message') as string;
+      file = formData.get('file') as File | null;
+    } else {
+      // JSON body
+      const body = await request.json();
+      userId = body.userId;
+      phoneNumber = body.phoneNumber;
+      message = body.message;
+    }
 
     // Get user by token or userId
     const user = userFromToken || (userId ? await db.query.users.findFirst({ where: eq(users.id, parseInt(userId)) }) : null);
@@ -44,9 +59,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Message or file is required' }, { status: 400 });
     }
 
-    const session = await getSession((user.id || 1).toString());
-    if (!session || !session.sock) {
-      return NextResponse.json({ error: 'WhatsApp not connected. Please scan QR code first.' }, { status: 404 });
+    // Check connection WITHOUT creating new session (waitForQR=false)
+    const session = await getSession(user.id.toString(), false);
+    if (!session || !session.connected || !session.sock?.user) {
+      return NextResponse.json({ 
+        error: 'WhatsApp not connected. Please scan QR code first.',
+        needsQR: true 
+      }, { status: 400 });
     }
 
     const formattedNumber = phoneNumber.includes('@') ? phoneNumber : `${phoneNumber}@s.whatsapp.net`;

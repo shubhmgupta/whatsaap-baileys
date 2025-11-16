@@ -8,12 +8,24 @@ import pino from 'pino';
 import fs from 'fs-extra';
 import path from 'path';
 
-const sessions = new Map<string, any>();
-const messageStore = new Map<string, any[]>(); // Store messages in memory per user
-const reconnectingUsers = new Set<string>(); // Track users currently reconnecting
-const qrResolvers = new Map<string, any>(); // Store QR promise resolvers
-const reconnectAttempts = new Map<string, number>(); // Track reconnection attempts
-let isInitialized = false;
+// Session management - UPDATED with enhanced logging and Status 440 handling
+// Use globalThis to ensure single instance across all module imports (fixes Next.js module duplication)
+const globalForSessions = globalThis as unknown as {
+  sessions: Map<string, any>;
+  messageStore: Map<string, any[]>;
+  reconnectingUsers: Set<string>;
+  qrResolvers: Map<string, any>;
+  reconnectAttempts: Map<string, number>;
+  heartbeatIntervals: Map<string, NodeJS.Timeout>;
+  isInitialized: boolean;
+};
+
+const sessions = globalForSessions.sessions ?? (globalForSessions.sessions = new Map<string, any>());
+const messageStore = globalForSessions.messageStore ?? (globalForSessions.messageStore = new Map<string, any[]>());
+const reconnectingUsers = globalForSessions.reconnectingUsers ?? (globalForSessions.reconnectingUsers = new Set<string>());
+const qrResolvers = globalForSessions.qrResolvers ?? (globalForSessions.qrResolvers = new Map<string, any>());
+const reconnectAttempts = globalForSessions.reconnectAttempts ?? (globalForSessions.reconnectAttempts = new Map<string, number>());
+let isInitialized = globalForSessions.isInitialized ?? false;
 
 // Restore existing sessions on startup
 async function initializeSessions() {
@@ -56,11 +68,12 @@ async function initializeSessions() {
   }
 }
 
-// Initialize sessions on module load
-initializeSessions();
+// DON'T auto-initialize on module load - causes conflicts
+// Sessions will be created on-demand when needed
+// initializeSessions();
 
-// Heartbeat mechanism to keep connections alive
-const heartbeatIntervals = new Map<string, NodeJS.Timeout>();
+// Heartbeat mechanism to keep connections alive - also use global storage
+const heartbeatIntervals = globalForSessions.heartbeatIntervals ?? (globalForSessions.heartbeatIntervals = new Map<string, NodeJS.Timeout>());
 
 function startHeartbeat(userId: string, sock: any) {
   // Clear existing heartbeat if any
@@ -90,14 +103,21 @@ function stopHeartbeat(userId: string) {
 }
 
 // Global error handlers for unhandled rejections
-process.on('unhandledRejection', (reason: any, promise) => {
+// Increase max listeners to prevent warnings
+process.setMaxListeners(20);
+
+const rejectionHandler = (reason: any, promise: Promise<any>) => {
   // Only log Boom errors, which are common in Baileys and often not critical
   if (reason?.isBoom) {
     console.error(`Baileys non-fatal error: ${reason.message}`);
     return;
   }
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-});
+};
+
+// Remove existing handler if any to prevent duplicates
+process.removeListener('unhandledRejection', rejectionHandler);
+process.on('unhandledRejection', rejectionHandler);
 
 process.on('uncaughtException', (error: Error, origin) => {
   console.error(`Caught exception: ${error}\n` + `Exception origin: ${origin}`);
@@ -106,8 +126,15 @@ process.on('uncaughtException', (error: Error, origin) => {
 async function createBaileysSession(userId: string) {
   // Prevent duplicate connection attempts
   if (reconnectingUsers.has(userId)) {
-    console.log('Connection attempt already in progress for user:', userId);
+    console.log('⚠️ Connection attempt already in progress for user:', userId);
     return sessions.get(userId);
+  }
+
+  // Check if already connected
+  const existingSession = sessions.get(userId);
+  if (existingSession?.sock?.user) {
+    console.log('✅ Using existing active session for user:', userId);
+    return existingSession;
   }
 
   try {
@@ -159,10 +186,26 @@ async function createBaileysSession(userId: string) {
       
       if (shouldReconnect) {
         // Handle different disconnect reasons
-        if (statusCode === DisconnectReason.connectionReplaced || statusCode === 401) {
-          console.log('⚠️ Connection replaced/conflict. Keeping session but requiring new scan.');
-          // Don't clear session files, just clear the active connection
-          sessions.set(userId, { ...sessions.get(userId), connected: false, sock: null });
+        if (statusCode === DisconnectReason.connectionReplaced || statusCode === 401 || statusCode === 440) {
+          console.log('⚠️ Connection replaced/conflict (Status 440/401). This means WhatsApp is open elsewhere.');
+          
+          // Keep a minimal session object so future updates can find it
+          // This prevents ghost updates from failing
+          const currentSession = sessions.get(userId);
+          
+          sessions.set(userId, {
+            connected: false,
+            sock: null,
+            needsQR: true,
+            lastDisconnect: new Date(),
+            qr: currentSession?.qr // Preserve QR if it exists
+          });
+          
+          stopHeartbeat(userId);
+          reconnectingUsers.delete(userId);
+          reconnectAttempts.delete(userId);
+          
+          console.log('🧹 Session marked disconnected. User must scan QR code again.');
           return;
         }
 
@@ -183,8 +226,19 @@ async function createBaileysSession(userId: string) {
           return;
         }
 
-        // For other errors, automatically reconnect
-        console.log(`🔄 Auto-reconnecting WhatsApp for user ${userId} in 5 seconds...`);
+        // For other errors, automatically reconnect with backoff
+        const attempts = reconnectAttempts.get(userId) || 0;
+        if (attempts >= 5) {
+          console.log(`❌ Max reconnection attempts reached for user ${userId}. Stopping.`);
+          sessions.set(userId, { ...sessions.get(userId), connected: false, sock: null });
+          reconnectAttempts.delete(userId);
+          return;
+        }
+        
+        reconnectAttempts.set(userId, attempts + 1);
+        const delay = Math.min(5000 * Math.pow(2, attempts), 60000); // Exponential backoff, max 60s
+        
+        console.log(`🔄 Auto-reconnecting WhatsApp for user ${userId} in ${delay/1000} seconds (attempt ${attempts + 1}/5)...`);
         sessions.set(userId, { ...sessions.get(userId), connected: false });
         
         setTimeout(() => {
@@ -195,7 +249,7 @@ async function createBaileysSession(userId: string) {
               reconnectingUsers.delete(userId);
             });
           }
-        }, 5000);
+        }, delay);
       } else {
         // Only clear session if user explicitly logged out from WhatsApp
         console.log(`🔌 User ${userId} logged out from WhatsApp`);
@@ -255,7 +309,23 @@ async function createBaileysSession(userId: string) {
     for (const message of m.messages) {
       try {
         const jid = message.key.remoteJid || '';
+        
+        // STRICT FILTER: Only process individual chat messages (ending with @s.whatsapp.net)
+        // Skip ALL of these:
+        // - status@broadcast (WhatsApp Status updates)
+        // - @g.us (Group messages)
+        // - @broadcast (Broadcast lists)
+        // - @newsletter (Newsletter/Channel messages)
+        if (!jid.endsWith('@s.whatsapp.net')) {
+          continue;
+        }
+        
         const senderNumber = jid.replace('@s.whatsapp.net', '');
+        
+        // Additional safety check: Skip if phone number looks invalid
+        if (!senderNumber || senderNumber.includes('@') || senderNumber.includes('broadcast') || senderNumber.includes('status')) {
+          continue;
+        }
         
         // Store message in memory for syncing
         const userKey = `${userId}_${senderNumber}`;
@@ -347,23 +417,41 @@ async function createBaileysSession(userId: string) {
   }
 }
 
-export async function getSession(userId: string) {
+export async function getSession(userId: string, waitForQR: boolean = false) {
   const existingSession = sessions.get(userId);
   
-  // If already connected, return the session
+  // 1. If fully connected with valid user, return immediately
   if (existingSession?.connected && existingSession?.sock?.user) {
     console.log('✅ Using existing connected session for user:', userId);
     return existingSession;
   }
   
-  // If session exists but not connected, check if socket is still valid
-  if (existingSession?.sock && !existingSession?.connected) {
-    console.log('⏳ Session exists but not connected for user:', userId);
-    return existingSession;
+  // 2. If actively connecting/reconnecting, return the session (DON'T clear it!)
+  if (reconnectingUsers.has(userId)) {
+    console.log('⚠️ Connection attempt already in progress for user:', userId);
+    return existingSession || null;
   }
   
-  // Only create new session if none exists
-  if (!existingSession || (!existingSession.sock && !reconnectingUsers.has(userId))) {
+  // 3. If session has socket but no user yet, it's still establishing connection
+  if (existingSession?.sock && !existingSession?.sock?.user) {
+    console.log('⏳ Session connecting for user:', userId);
+    return existingSession; // Don't clear, let it finish connecting
+  }
+  
+  // 4. If just checking status (waitForQR=false), return what exists even if partial
+  if (!waitForQR) {
+    return existingSession || null;
+  }
+  
+  // 5. Only clear if session is truly dead AND we're about to create new one
+  if (existingSession && !existingSession?.sock && !existingSession?.connected && waitForQR) {
+    console.log('🧹 Clearing dead session for user:', userId);
+    sessions.delete(userId);
+    stopHeartbeat(userId);
+  }
+  
+  // 6. Only create new session if explicitly waiting for QR (user initiated)
+  if (!sessions.get(userId) && !reconnectingUsers.has(userId) && waitForQR) {
     console.log('🆕 Creating new session for user:', userId);
     await createBaileysSession(userId);
     
@@ -386,7 +474,7 @@ export async function getSession(userId: string) {
     }
   }
   
-  return sessions.get(userId);
+  return sessions.get(userId) || null;
 }
 
 export async function logoutSession(userId: string) {
@@ -411,6 +499,27 @@ export async function logoutSession(userId: string) {
         const sessionDir = path.join(process.cwd(), `sessions/user_${userId}`);
         await fs.remove(sessionDir).catch(err => console.error('Failed to remove session directory:', err));
     }
+}
+
+export async function clearSession(userId: string) {
+  console.log(`🧹 Force clearing session for user ${userId}...`);
+  
+  // Stop heartbeat
+  stopHeartbeat(userId);
+  
+  // Remove from tracking sets
+  reconnectingUsers.delete(userId);
+  qrResolvers.delete(userId);
+  reconnectAttempts.delete(userId);
+  
+  // Clear session from memory
+  sessions.delete(userId);
+  
+  // Clear message store
+  const keysToDelete = Array.from(messageStore.keys()).filter(key => key.startsWith(`${userId}_`));
+  keysToDelete.forEach(key => messageStore.delete(key));
+  
+  console.log(`✅ Session cleared for user ${userId}`);
 }
 
 export function getStoredMessages(userId: string, phoneNumber: string) {

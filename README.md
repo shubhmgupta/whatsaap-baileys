@@ -67,8 +67,8 @@ Open [http://localhost:3000](http://localhost:3000) to see the application.
 ## 📚 Documentation
 
 Complete API documentation is available at:
-- **Online**: Visit `/dashboard/docs` after logging in
-- **Markdown**: See [DOCUMENTATION.md](./DOCUMENTATION.md) for detailed API reference
+
+- **Markdown**: See [API-DOCUMENTATION.md](./API-DOCUMENTATION.md) for detailed API reference
 
 ## 🏗️ Tech Stack
 
