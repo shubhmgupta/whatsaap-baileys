@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Book, Code, Copy, Check, Key, ArrowRight, Lock, QrCode, Send, FileText, Image, Video, FileAudio, Smartphone } from 'lucide-react';
 
 export default function PublicDocsPage() {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [selectedLang, setSelectedLang] = useState<'curl' | 'javascript' | 'python' | 'php'>('curl');
 
@@ -33,10 +34,10 @@ export default function PublicDocsPage() {
 
   const codeExamples = {
     qrConnect: {
-      curl: `curl -X POST https://yourapi.com/api/v1/auth/qr \\
+      curl: `curl -X POST ${baseUrl}/api/v1/auth/qr \\
   -H "Authorization: Bearer YOUR_API_TOKEN"`,
       javascript: `// Connect to WhatsApp using QR Code
-const response = await fetch('https://yourapi.com/api/v1/auth/qr', {
+const response = await fetch('${baseUrl}/api/v1/auth/qr', {
   method: 'POST',
   headers: {
     'Authorization': 'Bearer YOUR_API_TOKEN'
@@ -50,7 +51,7 @@ console.log('QR Code:', data.qr);
       python: `import requests
 
 # Connect to WhatsApp using QR Code
-url = "https://yourapi.com/api/v1/auth/qr"
+url = "${baseUrl}/api/v1/auth/qr"
 headers = {
     "Authorization": "Bearer YOUR_API_TOKEN"
 }
@@ -62,7 +63,7 @@ print("QR Code:", data["qr"])
 # Display QR code for user to scan with WhatsApp mobile app`,
       php: `<?php
 // Connect to WhatsApp using QR Code
-$url = "https://yourapi.com/api/v1/auth/qr";
+$url = "${baseUrl}/api/v1/auth/qr";
 $headers = [
     "Authorization: Bearer YOUR_API_TOKEN"
 ];
@@ -80,10 +81,10 @@ echo "QR Code: " . $data["qr"];
 ?>`,
     },
     checkStatus: {
-      curl: `curl -X GET https://yourapi.com/api/v1/auth/status \\
+      curl: `curl -X GET ${baseUrl}/api/v1/auth/status \\
   -H "Authorization: Bearer YOUR_API_TOKEN"`,
       javascript: `// Check WhatsApp connection status
-const response = await fetch('https://yourapi.com/api/v1/auth/status', {
+const response = await fetch('${baseUrl}/api/v1/auth/status', {
   method: 'GET',
   headers: {
     'Authorization': 'Bearer YOUR_API_TOKEN'
@@ -96,7 +97,7 @@ console.log('Connected:', data.connected);`,
       python: `import requests
 
 # Check WhatsApp connection status
-url = "https://yourapi.com/api/v1/auth/status"
+url = "${baseUrl}/api/v1/auth/status"
 headers = {
     "Authorization": "Bearer YOUR_API_TOKEN"
 }
@@ -108,7 +109,7 @@ print(f"Status: {data['status']}")
 print(f"Connected: {data['connected']}")`,
       php: `<?php
 // Check WhatsApp connection status
-$url = "https://yourapi.com/api/v1/auth/status";
+$url = "${baseUrl}/api/v1/auth/status";
 $headers = [
     "Authorization: Bearer YOUR_API_TOKEN"
 ];
@@ -125,7 +126,7 @@ echo "Connected: " . ($data["connected"] ? "Yes" : "No");
 ?>`,
     },
     sendText: {
-      curl: `curl -X POST https://yourapi.com/api/v1/message/send \\
+      curl: `curl -X POST ${baseUrl}/api/v1/message/send \\
   -H "Authorization: Bearer YOUR_API_TOKEN" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -133,7 +134,7 @@ echo "Connected: " . ($data["connected"] ? "Yes" : "No");
     "message": "Hello from WhatsApp API!"
   }'`,
       javascript: `// Send text message
-const response = await fetch('https://yourapi.com/api/v1/message/send', {
+const response = await fetch('${baseUrl}/api/v1/message/send', {
   method: 'POST',
   headers: {
     'Authorization': 'Bearer YOUR_API_TOKEN',
@@ -150,7 +151,7 @@ console.log('Message sent:', data);`,
       python: `import requests
 
 # Send text message
-url = "https://yourapi.com/api/v1/message/send"
+url = "${baseUrl}/api/v1/message/send"
 headers = {
     "Authorization": "Bearer YOUR_API_TOKEN",
     "Content-Type": "application/json"
@@ -166,7 +167,7 @@ data = response.json()
 print("Message sent:", data)`,
       php: `<?php
 // Send text message
-$url = "https://yourapi.com/api/v1/message/send";
+$url = "${baseUrl}/api/v1/message/send";
 $headers = [
     "Authorization: Bearer YOUR_API_TOKEN",
     "Content-Type: application/json"
@@ -187,7 +188,7 @@ echo "Message sent: " . $response;
 ?>`,
     },
     sendImage: {
-      curl: `curl -X POST https://yourapi.com/api/v1/message/send \\
+      curl: `curl -X POST ${baseUrl}/api/v1/message/send \\
   -H "Authorization: Bearer YOUR_API_TOKEN" \\
   -F "phoneNumber=919876543210" \\
   -F "message=Check out this image!" \\
@@ -198,7 +199,7 @@ formData.append('phoneNumber', '919876543210');
 formData.append('message', 'Check out this image!');
 formData.append('file', imageFile); // File object from input
 
-const response = await fetch('https://yourapi.com/api/v1/message/send', {
+const response = await fetch('${baseUrl}/api/v1/message/send', {
   method: 'POST',
   headers: {
     'Authorization': 'Bearer YOUR_API_TOKEN'
@@ -211,7 +212,7 @@ console.log('Image sent:', data);`,
       python: `import requests
 
 # Send image with caption
-url = "https://yourapi.com/api/v1/message/send"
+url = "${baseUrl}/api/v1/message/send"
 headers = {
     "Authorization": "Bearer YOUR_API_TOKEN"
 }
@@ -227,7 +228,7 @@ response = requests.post(url, headers=headers, files=files, data=data)
 print("Image sent:", response.json())`,
       php: `<?php
 // Send image with caption
-$url = "https://yourapi.com/api/v1/message/send";
+$url = "${baseUrl}/api/v1/message/send";
 $headers = [
     "Authorization: Bearer YOUR_API_TOKEN"
 ];
@@ -247,7 +248,7 @@ echo "Image sent: " . $response;
 ?>`,
     },
     sendDocument: {
-      curl: `curl -X POST https://yourapi.com/api/v1/message/send \\
+      curl: `curl -X POST ${baseUrl}/api/v1/message/send \\
   -H "Authorization: Bearer YOUR_API_TOKEN" \\
   -F "phoneNumber=919876543210" \\
   -F "message=Here is the document you requested" \\
@@ -258,7 +259,7 @@ formData.append('phoneNumber', '919876543210');
 formData.append('message', 'Here is the document you requested');
 formData.append('file', pdfFile); // File object
 
-const response = await fetch('https://yourapi.com/api/v1/message/send', {
+const response = await fetch('${baseUrl}/api/v1/message/send', {
   method: 'POST',
   headers: {
     'Authorization': 'Bearer YOUR_API_TOKEN'
@@ -271,7 +272,7 @@ console.log('Document sent:', data);`,
       python: `import requests
 
 # Send PDF document
-url = "https://yourapi.com/api/v1/message/send"
+url = "${baseUrl}/api/v1/message/send"
 headers = {
     "Authorization": "Bearer YOUR_API_TOKEN"
 }
@@ -287,7 +288,7 @@ response = requests.post(url, headers=headers, files=files, data=data)
 print("Document sent:", response.json())`,
       php: `<?php
 // Send PDF document
-$url = "https://yourapi.com/api/v1/message/send";
+$url = "${baseUrl}/api/v1/message/send";
 $headers = [
     "Authorization: Bearer YOUR_API_TOKEN"
 ];
@@ -307,10 +308,10 @@ echo "Document sent: " . $response;
 ?>`,
     },
     getContacts: {
-      curl: `curl -X GET https://yourapi.com/api/contacts \\
+      curl: `curl -X GET ${baseUrl}/api/v1/contacts \\
   -H "Authorization: Bearer YOUR_API_TOKEN"`,
       javascript: `// Get all contacts
-const response = await fetch('https://yourapi.com/api/contacts', {
+const response = await fetch('${baseUrl}/api/v1/contacts', {
   method: 'GET',
   headers: {
     'Authorization': 'Bearer YOUR_API_TOKEN'
@@ -322,7 +323,7 @@ console.log('Contacts:', contacts);`,
       python: `import requests
 
 # Get all contacts
-url = "https://yourapi.com/api/contacts"
+url = "${baseUrl}/api/v1/contacts"
 headers = {
     "Authorization": "Bearer YOUR_API_TOKEN"
 }
@@ -334,7 +335,7 @@ for contact in contacts:
     print(f"{contact['name']}: {contact['phoneNumber']}")`,
       php: `<?php
 // Get all contacts
-$url = "https://yourapi.com/api/contacts";
+$url = "${baseUrl}/api/v1/contacts";
 $headers = [
     "Authorization: Bearer YOUR_API_TOKEN"
 ];
