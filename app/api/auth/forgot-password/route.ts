@@ -14,17 +14,21 @@ export async function POST(request: Request) {
 
         const user = await db.query.users.findFirst({ where: eq(users.email, email) });
         if (!user) {
-            // Don't reveal that the user doesn't exist
-            return NextResponse.json({ message: 'If a user with that email exists, a password reset link has been sent.' });
+            return NextResponse.json({ error: 'No account found with this email address' }, { status: 404 });
         }
 
         const token = randomBytes(32).toString('hex');
         const expiresAt = new Date(Date.now() + 3600 * 1000); // 1 hour
+        
+        // Delete any existing reset tokens for this user
+        await db.delete(passwordResetTokens).where(eq(passwordResetTokens.userId, user.id));
+        
+        // Create new reset token
         await db.insert(passwordResetTokens).values({ userId: user.id, token, expiresAt });
 
-        await sendPasswordResetEmail(email, token);
+        await sendPasswordResetEmail(email, token, user.fullname);
 
-        return NextResponse.json({ message: 'If a user with that email exists, a password reset link has been sent.' });
+        return NextResponse.json({ message: 'Password reset link has been sent to your email' });
     } catch (error) {
         console.error('Forgot password error:', error);
         return NextResponse.json({ error: 'Failed to process request. Please try again.' }, { status: 500 });
