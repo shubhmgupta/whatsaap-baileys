@@ -30,6 +30,7 @@ export default function InboxPage() {
   const [sendLoading, setSendLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [showChat, setShowChat] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -43,6 +44,7 @@ export default function InboxPage() {
 
   useEffect(() => {
     if (selectedContact) {
+      setShowChat(true);
       loadMessages(selectedContact.id, selectedContact.phoneNumber);
       // Auto-refresh messages every 3 seconds
       const interval = setInterval(() => {
@@ -253,6 +255,11 @@ export default function InboxPage() {
     return contact.name || contact.phoneNumber;
   };
 
+  const handleBackToContacts = () => {
+    setShowChat(false);
+    setSelectedContact(null);
+  };
+
   if (!user) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center">
@@ -285,7 +292,9 @@ export default function InboxPage() {
       <div className="container mx-auto px-4 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-180px)]">
           {/* Contacts List */}
-          <div className="lg:col-span-1 bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700/50 flex flex-col overflow-hidden">
+          <div className={`lg:col-span-1 bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700/50 flex flex-col overflow-hidden ${
+            showChat ? 'hidden lg:flex' : 'flex'
+          }`}>
             <div className="p-4 border-b border-gray-700/50">
               <h2 className="text-xl font-bold text-white mb-3">Contacts</h2>
               <div className="relative">
@@ -348,12 +357,20 @@ export default function InboxPage() {
           </div>
 
           {/* Chat Area */}
-          <div className="lg:col-span-2 bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700/50 flex flex-col overflow-hidden">
+          <div className={`lg:col-span-2 bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700/50 flex flex-col overflow-hidden ${
+            showChat ? 'flex' : 'hidden lg:flex'
+          }`}>
             {selectedContact ? (
               <>
                 {/* Chat Header */}
                 <div className="p-4 border-b border-gray-700/50 bg-gray-800/80">
                   <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleBackToContacts}
+                      className="lg:hidden p-2 hover:bg-gray-700 rounded-lg transition -ml-2"
+                    >
+                      <ArrowLeft className="w-5 h-5 text-white" />
+                    </button>
                     <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold">
                       {getContactDisplayName(selectedContact).charAt(0).toUpperCase()}
                     </div>

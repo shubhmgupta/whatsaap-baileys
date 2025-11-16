@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Lock, AlertCircle, CheckCircle, Eye, EyeOff } from 'lucide-react';
 
-export default function ResetPassword() {
+function ResetPasswordForm() {
   const appName = process.env.NEXT_PUBLIC_APP_NAME || 'Codefy';
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
@@ -189,5 +189,17 @@ export default function ResetPassword() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ResetPassword() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center">
+        <div className="text-white">Loading...</div>
+      </div>
+    }>
+      <ResetPasswordForm />
+    </Suspense>
   );
 }
