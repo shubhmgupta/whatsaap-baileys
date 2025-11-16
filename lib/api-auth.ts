@@ -8,12 +8,17 @@ export type User = InferSelectModel<typeof users>;
 export async function getUserFromToken(token: string): Promise<User | null> {
   if (!token) return null;
   
-  const tokenRecord = await db.query.apiTokens.findFirst({ 
-    where: eq(apiTokens.token, token), 
-    with: { user: true } 
-  });
+  // Use join query instead of relational query to avoid schema relation dependency
+  const result = await db
+    .select({
+      user: users,
+    })
+    .from(apiTokens)
+    .innerJoin(users, eq(apiTokens.userId, users.id))
+    .where(eq(apiTokens.token, token))
+    .limit(1);
   
-  if (!tokenRecord?.user) return null;
+  if (!result.length || !result[0].user) return null;
   
-  return tokenRecord.user as User;
+  return result[0].user;
 }
