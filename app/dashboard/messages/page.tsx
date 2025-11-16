@@ -5,6 +5,7 @@ import { LogOut, Send, Phone, Image, File, Loader2, CheckCircle, XCircle, QrCode
 import Link from 'next/link';
 
 export default function Dashboard() {
+  const appName = process.env.NEXT_PUBLIC_APP_NAME || 'Codefy';
   const [user, setUser] = useState<any>(null);
   const [qrCode, setQrCode] = useState('');
   const [connected, setConnected] = useState(false);
@@ -512,7 +513,7 @@ export default function Dashboard() {
       <header className="bg-gray-800/50 backdrop-blur-sm border-b border-gray-700/50">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <Link href="/" className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-green-400 to-blue-500">
-            WhatsApp SaaS
+            {appName}
           </Link>
           <div className="flex items-center gap-4">
             <div className="text-right">

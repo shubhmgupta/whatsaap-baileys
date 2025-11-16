@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { Lock, AlertCircle, CheckCircle, Eye, EyeOff } from 'lucide-react';
 
 export default function ResetPassword() {
+  const appName = process.env.NEXT_PUBLIC_APP_NAME || 'Codefy';
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
 
@@ -67,7 +68,7 @@ export default function ResetPassword() {
         {/* Logo */}
         <div className="text-center mb-8">
           <Link href="/" className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-green-400 to-blue-500">
-            WhatsApp SaaS
+            {appName}
           </Link>
           <p className="text-gray-400 mt-2">Create a new password</p>
         </div>

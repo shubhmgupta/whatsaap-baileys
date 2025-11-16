@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Mail, Lock, User, Phone, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 export default function SignUp() {
+  const appName = process.env.NEXT_PUBLIC_APP_NAME || 'Codefy';
   const [formData, setFormData] = useState({
     fullname: '',
     email: '',
@@ -109,7 +110,7 @@ export default function SignUp() {
         {/* Logo */}
         <div className="text-center mb-8">
           <Link href="/" className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-green-400 to-blue-500">
-            WhatsApp SaaS
+            {appName}
           </Link>
           <p className="text-gray-400 mt-2">Create your account</p>
         </div>

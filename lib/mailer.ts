@@ -17,6 +17,7 @@ const transport = isSmtpConfigured ? nodemailer.createTransport({
 
 export async function sendVerificationEmail(email: string, token: string) {
     const baseUrl = process.env.APP_URL || 'http://localhost:3000';
+    const appName = process.env.APP_NAME || 'Codefy';
     
     if (!isSmtpConfigured || !transport) {
         console.log('\n📧 Email verification link (SMTP not configured):');
@@ -30,8 +31,8 @@ export async function sendVerificationEmail(email: string, token: string) {
         await transport.sendMail({
             from: process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER,
             to: email,
-            subject: 'Verify your email address',
-            html: `<p>Click <a href="${verificationLink}">here</a> to verify your email address.</p>`,
+            subject: `Verify your email address - ${appName}`,
+            html: `<p>Click <a href="${verificationLink}">here</a> to verify your email address for ${appName}.</p>`,
         });
     } catch (error) {
         console.error('Failed to send verification email:', error);
@@ -42,6 +43,7 @@ export async function sendVerificationEmail(email: string, token: string) {
 
 export async function sendPasswordResetEmail(email: string, token: string, userName?: string) {
     const baseUrl = process.env.APP_URL || 'http://localhost:3000';
+    const appName = process.env.APP_NAME || 'Codefy';
     
     if (!isSmtpConfigured || !transport) {
         console.log('\n🔐 Password reset link (SMTP not configured):');
@@ -55,7 +57,7 @@ export async function sendPasswordResetEmail(email: string, token: string, userN
         await transport.sendMail({
             from: process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER,
             to: email,
-            subject: 'Reset Your Password - WhatsApp SaaS',
+            subject: `Reset Your Password - ${appName}`,
             html: `
 <!DOCTYPE html>
 <html>
@@ -66,7 +68,7 @@ export async function sendPasswordResetEmail(email: string, token: string, userN
 </head>
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
   <div style="background: linear-gradient(135deg, #10b981 0%, #3b82f6 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-    <h1 style="color: white; margin: 0; font-size: 28px;">WhatsApp SaaS</h1>
+    <h1 style="color: white; margin: 0; font-size: 28px;">${appName}</h1>
   </div>
   
   <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
@@ -74,7 +76,7 @@ export async function sendPasswordResetEmail(email: string, token: string, userN
     
     ${userName ? `<p>Hello <strong>${userName}</strong>,</p>` : '<p>Hello,</p>'}
     
-    <p>We received a request to reset your password for your WhatsApp SaaS account. Click the button below to create a new password:</p>
+    <p>We received a request to reset your password for your ${appName} account. Click the button below to create a new password:</p>
     
     <div style="text-align: center; margin: 30px 0;">
       <a href="${resetLink}" style="background: linear-gradient(135deg, #10b981 0%, #3b82f6 100%); color: white; padding: 14px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Reset Password</a>
@@ -96,7 +98,7 @@ export async function sendPasswordResetEmail(email: string, token: string, userN
     <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
     
     <p style="color: #999; font-size: 12px; text-align: center; margin: 0;">
-      © ${new Date().getFullYear()} WhatsApp SaaS. All rights reserved.
+      © ${new Date().getFullYear()} ${appName}. All rights reserved.
     </p>
   </div>
 </body>

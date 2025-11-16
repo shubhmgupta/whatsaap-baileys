@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Mail, AlertCircle, CheckCircle, ArrowLeft } from 'lucide-react';
 
 export default function ForgotPassword() {
+  const appName = process.env.NEXT_PUBLIC_APP_NAME || 'Codefy';
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -44,7 +45,7 @@ export default function ForgotPassword() {
         {/* Logo */}
         <div className="text-center mb-8">
           <Link href="/" className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-green-400 to-blue-500">
-            WhatsApp SaaS
+            {appName}
           </Link>
           <p className="text-gray-400 mt-2">Reset your password</p>
         </div>

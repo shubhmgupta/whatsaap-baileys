@@ -6,6 +6,7 @@ import { Book, Code, Copy, Check, Key, ArrowRight, Lock, QrCode, Send, FileText,
 
 export default function PublicDocsPage() {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const appName = process.env.NEXT_PUBLIC_APP_NAME || 'Codefy';
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [selectedLang, setSelectedLang] = useState<'curl' | 'javascript' | 'python' | 'php'>('curl');
 
@@ -360,7 +361,7 @@ foreach ($contacts as $contact) {
       <header className="sticky top-0 z-50 bg-gray-900/80 backdrop-blur-md border-b border-gray-800">
         <div className="container mx-auto px-4 h-16 flex justify-between items-center">
           <Link href="/" className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-green-400 to-blue-500">
-            WhatsApp SaaS
+            {appName}
           </Link>
           <div className="flex items-center space-x-4">
             <Link href="/signin" className="text-gray-300 hover:text-white transition">Sign In</Link>
@@ -703,7 +704,7 @@ foreach ($contacts as $contact) {
       {/* Footer */}
       <footer className="border-t border-gray-800 mt-20">
         <div className="container mx-auto px-4 py-8 text-center text-gray-400">
-          <p>&copy; 2025 WhatsApp SaaS. All rights reserved.</p>
+          <p>&copy; 2025 {appName}. All rights reserved.</p>
         </div>
       </footer>
     </div>

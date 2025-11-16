@@ -3,13 +3,15 @@ import { MessageSquare, Zap, Shield, Code, CheckCircle2, ArrowRight } from 'luci
 import { PricingSection } from '@/components/PricingSection';
 
 export default function Home() {
+  const appName = process.env.NEXT_PUBLIC_APP_NAME || 'Codefy';
+  
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-900 to-gray-800 text-white">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-gray-900/80 backdrop-blur-md border-b border-gray-800">
         <div className="container mx-auto px-4 h-16 flex justify-between items-center">
           <Link href="/" className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-green-400 to-blue-500">
-            WhatsApp SaaS
+            {appName}
           </Link>
           <nav className="hidden md:flex items-center space-x-8">
             <a href="#features" className="text-gray-300 hover:text-white transition">Features</a>
@@ -159,7 +161,7 @@ export default function Home() {
         <div className="container mx-auto px-4 py-12">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             <div>
-              <h3 className="text-xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-green-400 to-blue-500">WhatsApp SaaS</h3>
+              <h3 className="text-xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-green-400 to-blue-500">{appName}</h3>
               <p className="text-gray-400">Automate WhatsApp at scale with our powerful API.</p>
             </div>
             <div>
@@ -187,7 +189,7 @@ export default function Home() {
             </div>
           </div>
           <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
-            <p>&copy; 2025 WhatsApp SaaS. All rights reserved.</p>
+            <p>&copy; 2025 {appName}. All rights reserved.</p>
           </div>
         </div>
       </footer>

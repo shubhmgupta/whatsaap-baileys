@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const appName = process.env.NEXT_PUBLIC_APP_NAME || 'Codefy';
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const pathname = usePathname();
@@ -61,7 +62,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {/* Logo */}
           <div className="flex items-center justify-between p-6 border-b border-gray-700/50">
             <Link href="/" className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-green-400 to-blue-500">
-              WhatsApp SaaS
+              {appName}
             </Link>
             <button
               onClick={() => setSidebarOpen(false)}
@@ -124,7 +125,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Menu className="w-6 h-6" />
             </button>
             <Link href="/" className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-green-400 to-blue-500">
-              WhatsApp SaaS
+              {appName}
             </Link>
             <div className="w-6" /> {/* Spacer for centering */}
           </div>

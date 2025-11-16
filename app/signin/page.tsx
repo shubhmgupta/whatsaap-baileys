@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Mail, Lock, AlertCircle } from 'lucide-react';
 
 export default function SignIn() {
+  const appName = process.env.NEXT_PUBLIC_APP_NAME || 'Codefy';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -48,7 +49,7 @@ export default function SignIn() {
         {/* Logo */}
         <div className="text-center mb-8">
           <Link href="/" className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-green-400 to-blue-500">
-            WhatsApp SaaS
+            {appName}
           </Link>
           <p className="text-gray-400 mt-2">Sign in to your account</p>
         </div>
