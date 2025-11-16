@@ -54,13 +54,13 @@ export async function POST(request: Request) {
     if (contentType.includes('multipart/form-data') || contentType.includes('application/x-www-form-urlencoded')) {
       const formData = await request.formData();
       phoneNumber = formData.get('phoneNumber') as string;
-      message = formData.get('message') as string;
+      message = (formData.get('message') as string) || '';
       file = formData.get('file') as File | null;
     } else {
       // JSON body
       const body = await request.json();
       phoneNumber = body.phoneNumber;
-      message = body.message;
+      message = body.message || '';
     }
 
     if (!phoneNumber) {
@@ -69,9 +69,10 @@ export async function POST(request: Request) {
       }, { status: 400, headers: corsHeaders });
     }
 
+    // At least one of message or file must be provided
     if (!message && !file) {
       return NextResponse.json({ 
-        error: 'Message or file is required' 
+        error: 'Either message text or file is required' 
       }, { status: 400, headers: corsHeaders });
     }
 
@@ -127,8 +128,9 @@ export async function POST(request: Request) {
       }, { status: 400, headers: corsHeaders });
     }
 
-    // Send message with or without file
+    // Handle three combinations: text only, file only, text + file
     if (file) {
+      // File provided (with or without text)
       const bytes = await file.arrayBuffer();
       const buffer = Buffer.from(bytes);
       const tempPath = join(process.cwd(), 'temp', file.name);
@@ -141,21 +143,29 @@ export async function POST(request: Request) {
         const mimeType = file.type;
 
         if (mimeType.startsWith('image/')) {
+          // Image with optional caption (text)
           await session.sock.sendMessage(result.jid, {
             image: fileBuffer,
-            caption: message || undefined,
+            caption: message || undefined, // Caption is optional
           });
         } else if (mimeType.startsWith('video/')) {
+          // Video with optional caption (text)
           await session.sock.sendMessage(result.jid, {
             video: fileBuffer,
             caption: message || undefined,
           });
         } else if (mimeType.startsWith('audio/')) {
+          // Audio (no caption support in WhatsApp)
           await session.sock.sendMessage(result.jid, {
             audio: fileBuffer,
             mimetype: mimeType,
           });
+          // If text provided, send it as separate message
+          if (message) {
+            await session.sock.sendMessage(result.jid, { text: message });
+          }
         } else {
+          // Document with optional caption (text)
           await session.sock.sendMessage(result.jid, {
             document: fileBuffer,
             mimetype: mimeType,
@@ -167,8 +177,8 @@ export async function POST(request: Request) {
         // Clean up temp file
         await unlink(tempPath).catch(() => {});
       }
-    } else {
-      // Send text only
+    } else if (message) {
+      // Text only (no file)
       await session.sock.sendMessage(result.jid, { text: message });
     }
 
