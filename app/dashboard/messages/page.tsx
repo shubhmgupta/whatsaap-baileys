@@ -38,6 +38,28 @@ export default function Dashboard() {
       const parsedUser = JSON.parse(userData);
       setUser(parsedUser);
       
+      // Attempt auto-restore from database on page load (no QR generation if no backup)
+      (async () => {
+        try {
+          const res = await fetch('/api/auth/restore', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: parsedUser.id })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.status === 'restored') {
+              setConnected(!!data.connected);
+              setSuccess('✅ Restored WhatsApp session from database');
+              // refresh contacts
+              loadContacts(parsedUser.id);
+            }
+          }
+        } catch (err) {
+          console.error('Auto-restore error:', err);
+        }
+      })();
+
       // Check connection status on mount
       checkConnectionStatus(parsedUser.id);
       

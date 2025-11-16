@@ -213,6 +213,53 @@ async function restoreSessionFilesFromState(userId: string, savedState: any): Pr
   }
 }
 
+// Try to restore session from database if backup exists. Returns session or null.
+export async function tryRestoreFromDatabase(userId: string): Promise<any | null> {
+  try {
+    const dbState = await getSessionFromDatabase(userId);
+    if (!dbState) return null;
+
+    const sessionPath = path.join(process.cwd(), `sessions/user_${userId}`);
+    const credsPath = path.join(sessionPath, 'creds.json');
+
+    // Restore files if missing
+    if (!await fs.pathExists(credsPath)) {
+      await restoreSessionFilesFromState(userId, dbState);
+      console.log(`💾 Restored session files from DB for user ${userId} (auto-restore)`);
+    } else {
+      console.log(`📁 Session files already exist for user ${userId}`);
+    }
+
+    // If already connected in-memory, return it
+    const existing = sessions.get(userId);
+    if (existing?.connected && existing?.sock?.user) return existing;
+
+    // Create socket and attempt connection
+    await createBaileysSession(userId);
+
+    // Wait up to 10 seconds for connection
+    const session = await new Promise<any>((resolve) => {
+      let attempts = 0;
+      const iv = setInterval(() => {
+        const s = sessions.get(userId);
+        attempts++;
+        if (s?.connected) {
+          clearInterval(iv);
+          resolve(s);
+        } else if (attempts >= 20) { // 20 * 500ms = 10s
+          clearInterval(iv);
+          resolve(s || null);
+        }
+      }, 500);
+    });
+
+    return session;
+  } catch (error) {
+    console.error('Error in tryRestoreFromDatabase:', error);
+    return null;
+  }
+}
+
 // Run cleanup every 6 hours
 setInterval(cleanupInactiveSessions, 6 * 60 * 60 * 1000);
 // Run immediately on startup
