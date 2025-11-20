@@ -34,7 +34,7 @@ export default function AdminUsersPage() {
       
       if (response.ok) {
         const data = await response.json();
-        console.log('Users loaded:', data);
+        // console.log('Users loaded:', data);
         setUsers(data);
       } else {
         const error = await response.json();
@@ -153,9 +153,9 @@ export default function AdminUsersPage() {
       </div>
 
       {/* Users Table */}
-      <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg border border-gray-700/50 overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-gray-900/50 border-b border-gray-700">
+      <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg border border-gray-700/50 overflow-hidden overflow-scroll">
+        <table className="w-full overflow-hidden">
+          <thead className="bg-gray-900/50 border-b border-gray-700 overflow-scroll">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                 User
