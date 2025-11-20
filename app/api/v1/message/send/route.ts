@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/baileys';
+import { getSession, uploadBufferToCloudinary } from '@/lib/baileys';
 import { getUserFromToken, ensureWhatsAppSession } from '@/lib/api-auth';
 import { db } from '@/lib/db';
 import { messages, users, contacts, chatMessages } from '@/db/schema';
@@ -129,6 +129,16 @@ export async function POST(request: Request) {
         const fileBuffer = readFileSync(tempPath);
         const mimeType = file.type;
 
+        // Try uploading to Cloudinary first so we can save the full URL in DB
+        let outgoingMediaUrl: string | null = null;
+        try {
+          outgoingMediaUrl = await uploadBufferToCloudinary(fileBuffer, mimeType, file.name);
+          console.log('   🔗 Outgoing file uploaded to Cloudinary:', outgoingMediaUrl);
+        } catch (err) {
+          console.error('   ⚠️ Failed to upload outgoing file to Cloudinary:', err);
+          outgoingMediaUrl = null;
+        }
+
         if (mimeType.startsWith('image/')) {
           // Image with optional caption (text)
           await session.sock.sendMessage(result.jid, {
@@ -160,6 +170,10 @@ export async function POST(request: Request) {
             caption: message || undefined,
           });
         }
+
+        // Attach outgoingMediaUrl to file variable so we can save it below
+        // (we cannot mutate the File object directly in TypeScript runtime, so store separately)
+        (file as any)._uploadedUrl = outgoingMediaUrl;
       } finally {
         // Clean up temp file
         await unlink(tempPath).catch(() => {});
@@ -201,12 +215,13 @@ export async function POST(request: Request) {
     }
 
     // Save chat message
+    const outgoingMediaUrl = (file as any)?._uploadedUrl ?? null;
     await db.insert(chatMessages).values({
       userId,
       contactId: contact.id,
       phoneNumber,
       message: message || null,
-      mediaUrl: file?.name || null,
+      mediaUrl: outgoingMediaUrl,
       mediaType: file?.type || null,
       isFromMe: true,
     });

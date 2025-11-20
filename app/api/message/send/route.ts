@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/baileys';
+import { getSession, uploadBufferToCloudinary } from '@/lib/baileys';
 import { db } from '@/lib/db';
 import { messages, users, apiTokens, contacts, chatMessages } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
@@ -120,6 +120,16 @@ export async function POST(request: Request) {
         const fileBuffer = readFileSync(tempPath);
         const mimeType = file.type;
 
+        // Upload outgoing file to Cloudinary to get a public URL
+        let outgoingMediaUrl: string | null = null;
+        try {
+          outgoingMediaUrl = await uploadBufferToCloudinary(fileBuffer, mimeType, file.name);
+          console.log('   🔗 Outgoing file uploaded to Cloudinary:', outgoingMediaUrl);
+        } catch (err) {
+          console.error('   ⚠️ Failed to upload outgoing file to Cloudinary:', err);
+          outgoingMediaUrl = null;
+        }
+
         if (mimeType.startsWith('image/')) {
           await session.sock.sendMessage(result.jid, {
             image: fileBuffer,
@@ -143,6 +153,8 @@ export async function POST(request: Request) {
             caption: message || undefined,
           });
         }
+
+        (file as any)._uploadedUrl = outgoingMediaUrl;
       } finally {
         // Clean up temp file
         await unlink(tempPath).catch(() => {});
@@ -181,12 +193,13 @@ export async function POST(request: Request) {
     }
 
     // Save chat message
+    const outgoingMediaUrl = (file as any)?._uploadedUrl ?? null;
     await db.insert(chatMessages).values({
       userId: user.id,
       contactId: contact.id,
       phoneNumber,
       message: message || null,
-      mediaUrl: file?.name || null,
+      mediaUrl: outgoingMediaUrl,
       mediaType: file?.type || null,
       isFromMe: true,
     });

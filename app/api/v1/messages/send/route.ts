@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/baileys';
+import { getSession, uploadBufferToCloudinary } from '@/lib/baileys';
 import { getUserFromToken } from '@/lib/api-auth';
 import { db } from '@/lib/db';
 import { messages, users, contacts, chatMessages } from '@/db/schema';
@@ -129,6 +129,16 @@ export async function POST(request: Request) {
         const fileBuffer = readFileSync(tempFilePath);
         const mimeType = file.type;
 
+        // Attempt Cloudinary upload for outgoing file
+        let outgoingMediaUrl: string | null = null;
+        try {
+          outgoingMediaUrl = await uploadBufferToCloudinary(fileBuffer, mimeType, file.name);
+          console.log('   🔗 Outgoing file uploaded to Cloudinary:', outgoingMediaUrl);
+        } catch (err) {
+          console.error('   ⚠️ Failed to upload outgoing file to Cloudinary:', err);
+          outgoingMediaUrl = null;
+        }
+
         if (mimeType.startsWith('image/')) {
           sentMessage = await session.sock.sendMessage(jid, {
             image: fileBuffer,
@@ -152,6 +162,9 @@ export async function POST(request: Request) {
             caption: message || undefined
           });
         }
+
+        // attach upload url to file for DB saving
+        (file as any)._uploadedUrl = outgoingMediaUrl;
 
         await unlink(tempFilePath);
       } catch (error) {
@@ -201,11 +214,14 @@ export async function POST(request: Request) {
     });
 
     if (contact) {
+      const outgoingMediaUrl = (file as any)?._uploadedUrl ?? null;
       await db.insert(chatMessages).values({
         userId,
         contactId: contact.id,
         phoneNumber,
         message: message || '[Media file]',
+        mediaUrl: outgoingMediaUrl,
+        mediaType: file?.type || null,
         isFromMe: true,
         timestamp: new Date()
       });

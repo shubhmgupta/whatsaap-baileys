@@ -15,8 +15,58 @@ import path from "path";
 import { promisify } from "util";
 import { exec } from "child_process";
 import { v2 as cloudinary } from "cloudinary";
+import dotenv from "dotenv";
+
+// Load .env early so Cloudinary config can read variables when this module loads
+dotenv.config();
+
+// Configure Cloudinary once at module initialization if env vars are present
+if (
+  process.env.CLOUDINARY_API_KEY &&
+  process.env.CLOUDINARY_API_SECRET &&
+  process.env.CLOUDINARY_CLOUD_NAME
+) {
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+  });
+  console.log("✅ Cloudinary configured (module init)");
+} else {
+  console.warn("⚠️ Cloudinary not fully configured (missing env vars). Uploads will fail.");
+}
 
 const execAsync = promisify(exec);
+
+// Helper: upload a Buffer to Cloudinary and return the secure_url (or null)
+export async function uploadBufferToCloudinary(
+  buffer: Buffer,
+  mediaType: string,
+  fileName: string
+): Promise<string | null> {
+  // Ensure cloudinary was configured at module init
+  if (!process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET || !process.env.CLOUDINARY_CLOUD_NAME) {
+    throw new Error("Cloudinary not configured");
+  }
+
+  const dataUri = `data:${mediaType};base64,${buffer.toString("base64")}`;
+
+  try {
+    const uploadRes = await cloudinary.uploader.upload(dataUri, {
+      folder: process.env.CLOUDINARY_FOLDER || "whatsapp-automation",
+      public_id: path.parse(fileName).name,
+      resource_type: "auto",
+    });
+
+    // Log full response for debugging (secure_url typically present)
+    console.log("   🔁 Cloudinary upload response:", uploadRes);
+
+    return uploadRes?.secure_url ?? null;
+  } catch (err) {
+    console.error("   ❌ Cloudinary uploader threw an error:", err);
+    throw err;
+  }
+}
 
 // Session management - UPDATED with enhanced logging and Status 440 handling
 // Use globalThis to ensure single instance across all module imports (fixes Next.js module duplication)
@@ -728,50 +778,24 @@ async function createBaileysSession(userId: string) {
                 const ext = mediaType.split('/')[1] || 'jpg';
                 const fileName = `image_${Date.now()}.${ext}`;
                 
-                // Ensure uploads directory exists
-                const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
-                console.log('   - Uploads dir:', uploadsDir);
-                await fs.ensureDir(uploadsDir);
-                
-                // Save the file
-                const filePath = path.join(uploadsDir, fileName);
-                console.log('   - Saving to:', filePath);
-                await fs.writeFile(filePath, buffer);
-                
-                // Verify file was saved
-                const fileExists = await fs.pathExists(filePath);
-                console.log('   - File exists after save:', fileExists);
-                
-                // Local fallback URL
-                const localUrl = `/uploads/${fileName}`;
-                mediaUrl = localUrl;
-                console.log('   ✅ Image saved locally:', mediaUrl);
-                console.log('   - Full path:', filePath);
-
-                // Attempt Cloudinary upload when configured
+                // Cloudinary-only: do NOT save to local filesystem
                 if (process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET && process.env.CLOUDINARY_CLOUD_NAME) {
                   try {
-                    cloudinary.config({
-                      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-                      api_key: process.env.CLOUDINARY_API_KEY,
-                      api_secret: process.env.CLOUDINARY_API_SECRET,
-                    });
-                    const dataUri = `data:${mediaType};base64,${buffer.toString('base64')}`;
-                    const uploadRes = await cloudinary.uploader.upload(dataUri, {
-                      folder: process.env.CLOUDINARY_FOLDER || 'whatsapp-automation',
-                      public_id: path.parse(fileName).name,
-                      resource_type: 'auto',
-                    });
-                    if (uploadRes?.secure_url) {
-                      mediaUrl = uploadRes.secure_url;
-                      console.log('   🔗 Uploaded to Cloudinary:', mediaUrl);
+                    const secureUrl = await uploadBufferToCloudinary(buffer, mediaType, fileName);
+                    if (secureUrl) {
+                      mediaUrl = secureUrl;
+                      console.log('   🔗 Image uploaded to Cloudinary:', mediaUrl);
                     } else {
-                      console.log('   ⚠️ Cloudinary upload did not return secure_url, keeping local path');
+                      console.error('   ❌ Cloudinary upload did not return secure_url — media will not be saved');
+                      mediaUrl = null;
                     }
                   } catch (err) {
-                    console.error('   ⚠️ Cloudinary upload failed:', err);
-                    mediaUrl = localUrl;
+                    console.error('   ❌ Cloudinary upload failed for image:', err);
+                    mediaUrl = null;
                   }
+                } else {
+                  console.error('   ❌ Cloudinary not configured — refusing to save media locally by policy');
+                  mediaUrl = null;
                 }
               } catch (error: any) {
                 console.error("   ❌ Error downloading image:");
@@ -801,17 +825,7 @@ async function createBaileysSession(userId: string) {
                 const ext = mediaType.split('/')[1] || 'mp4';
                 const fileName = `video_${Date.now()}.${ext}`;
                 
-                const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
-                await fs.ensureDir(uploadsDir);
-                
-                const filePath = path.join(uploadsDir, fileName);
-                await fs.writeFile(filePath, buffer);
-                
-                const localUrl = `/uploads/${fileName}`;
-                mediaUrl = localUrl;
-                console.log('   ✅ Video saved locally:', mediaUrl);
-                console.log('   - Full path:', filePath);
-
+                // Cloudinary-only: do NOT save to local filesystem
                 if (process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET && process.env.CLOUDINARY_CLOUD_NAME) {
                   try {
                     cloudinary.config({
@@ -828,11 +842,17 @@ async function createBaileysSession(userId: string) {
                     if (uploadRes?.secure_url) {
                       mediaUrl = uploadRes.secure_url;
                       console.log('   🔗 Uploaded video to Cloudinary:', mediaUrl);
+                    } else {
+                      console.error('   ❌ Cloudinary upload did not return secure_url — media will not be saved');
+                      mediaUrl = null;
                     }
                   } catch (err) {
-                    console.error('   ⚠️ Cloudinary upload failed for video:', err);
-                    mediaUrl = localUrl;
+                    console.error('   ❌ Cloudinary upload failed for video:', err);
+                    mediaUrl = null;
                   }
+                } else {
+                  console.error('   ❌ Cloudinary not configured — refusing to save media locally by policy');
+                  mediaUrl = null;
                 }
               } catch (error: any) {
                 console.error("   ❌ Error downloading video:");
@@ -862,17 +882,7 @@ async function createBaileysSession(userId: string) {
                 const ext = mediaType.split('/')[1] || 'ogg';
                 const fileName = `audio_${Date.now()}.${ext}`;
                 
-                const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
-                await fs.ensureDir(uploadsDir);
-                
-                const filePath = path.join(uploadsDir, fileName);
-                await fs.writeFile(filePath, buffer);
-                
-                const localUrl = `/uploads/${fileName}`;
-                mediaUrl = localUrl;
-                console.log('   ✅ Audio saved locally:', mediaUrl);
-                console.log('   - Full path:', filePath);
-
+                // Cloudinary-only: do NOT save to local filesystem
                 if (process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET && process.env.CLOUDINARY_CLOUD_NAME) {
                   try {
                     cloudinary.config({
@@ -889,11 +899,17 @@ async function createBaileysSession(userId: string) {
                     if (uploadRes?.secure_url) {
                       mediaUrl = uploadRes.secure_url;
                       console.log('   🔗 Uploaded audio to Cloudinary:', mediaUrl);
+                    } else {
+                      console.error('   ❌ Cloudinary upload did not return secure_url — media will not be saved');
+                      mediaUrl = null;
                     }
                   } catch (err) {
-                    console.error('   ⚠️ Cloudinary upload failed for audio:', err);
-                    mediaUrl = localUrl;
+                    console.error('   ❌ Cloudinary upload failed for audio:', err);
+                    mediaUrl = null;
                   }
+                } else {
+                  console.error('   ❌ Cloudinary not configured — refusing to save media locally by policy');
+                  mediaUrl = null;
                 }
               } catch (error: any) {
                 console.error("   ❌ Error downloading audio:");
@@ -923,17 +939,7 @@ async function createBaileysSession(userId: string) {
                 
                 const fileName = message.message.documentMessage.fileName || `document_${Date.now()}`;
                 
-                const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
-                await fs.ensureDir(uploadsDir);
-                
-                const filePath = path.join(uploadsDir, fileName);
-                await fs.writeFile(filePath, buffer);
-                
-                const localUrl = `/uploads/${fileName}`;
-                mediaUrl = localUrl;
-                console.log('   ✅ Document saved locally:', mediaUrl);
-                console.log('   - Full path:', filePath);
-
+                // Cloudinary-only: do NOT save to local filesystem
                 if (process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET && process.env.CLOUDINARY_CLOUD_NAME) {
                   try {
                     cloudinary.config({
@@ -950,11 +956,17 @@ async function createBaileysSession(userId: string) {
                     if (uploadRes?.secure_url) {
                       mediaUrl = uploadRes.secure_url;
                       console.log('   🔗 Uploaded document to Cloudinary:', mediaUrl);
+                    } else {
+                      console.error('   ❌ Cloudinary upload did not return secure_url — media will not be saved');
+                      mediaUrl = null;
                     }
                   } catch (err) {
-                    console.error('   ⚠️ Cloudinary upload failed for document:', err);
-                    mediaUrl = localUrl;
+                    console.error('   ❌ Cloudinary upload failed for document:', err);
+                    mediaUrl = null;
                   }
+                } else {
+                  console.error('   ❌ Cloudinary not configured — refusing to save media locally by policy');
+                  mediaUrl = null;
                 }
               } catch (error: any) {
                 console.error("   ❌ Error downloading document:");
