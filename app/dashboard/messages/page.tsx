@@ -678,7 +678,7 @@ export default function Dashboard() {
                   className="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg transition flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   <XCircle className="w-4 h-4" />
-                  Clear Stored Credentials (force new QR)
+                  Clear cache
                 </button>
               </div>
 
