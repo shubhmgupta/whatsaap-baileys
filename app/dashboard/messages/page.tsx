@@ -333,6 +333,36 @@ export default function Dashboard() {
     }
   };
 
+  const handleClearCredentials = async () => {
+    if (!confirm('This will delete stored WhatsApp credentials for your account and force a fresh QR generation. Continue?')) return;
+    setLoading(true);
+    setError('');
+    setSuccess('');
+    try {
+      const res = await fetch('/api/auth/clear-credentials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user?.id || 1 }),
+      });
+
+      if (res.ok) {
+        setConnected(false);
+        setQrCode('');
+        setSuccess('✅ Credentials cleared. Generate a new QR to reconnect.');
+        // Refresh user data
+        if (user?.id) await refreshUserData(user.id);
+      } else {
+        const data = await res.json();
+        setError(data.error || 'Failed to clear credentials');
+      }
+    } catch (err) {
+      console.error('Clear credentials error:', err);
+      setError('Failed to clear credentials. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setSelectedFile(e.target.files[0]);
@@ -639,6 +669,17 @@ export default function Dashboard() {
                     )}
                   </button>
                 )}
+              </div>
+
+              <div className="mt-3">
+                <button
+                  onClick={handleClearCredentials}
+                  disabled={loading}
+                  className="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg transition flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <XCircle className="w-4 h-4" />
+                  Clear Stored Credentials (force new QR)
+                </button>
               </div>
 
               <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/50 rounded-lg">
