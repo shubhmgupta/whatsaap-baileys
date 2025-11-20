@@ -82,6 +82,17 @@ export default function InboxPage() {
       const res = await fetch(`/api/contacts/${contactId}/messages?userId=${user?.id}&phoneNumber=${phoneNumber}`);
       if (res.ok) {
         const data = await res.json();
+        console.log('📬 Loaded messages:', data.messages?.length || 0);
+        
+        // Log media messages for debugging
+        const mediaMessages = data.messages?.filter((m: Message) => m.mediaUrl) || [];
+        if (mediaMessages.length > 0) {
+          console.log('🖼️ Media messages found:', mediaMessages.length);
+          mediaMessages.forEach((msg: Message, idx: number) => {
+            console.log(`   ${idx + 1}. Type: ${msg.mediaType}, URL: ${msg.mediaUrl}`);
+          });
+        }
+        
         setMessages(data.messages || []);
       }
     } catch (error) {
@@ -162,89 +173,98 @@ export default function InboxPage() {
   const renderMedia = (msg: Message) => {
     if (!msg.mediaUrl) return null;
 
-    switch (msg.mediaType) {
-      case 'image':
-        return (
-          <div className="mt-2">
-            <div className="relative group">
-              <img
-                src={msg.mediaUrl}
-                alt="Shared image"
-                className="max-w-[200px] max-h-[150px] object-cover rounded-lg cursor-pointer hover:opacity-90 transition"
-                onClick={() => window.open(msg.mediaUrl!, '_blank')}
-              />
-              <a
-                href={msg.mediaUrl}
-                download
-                className="absolute top-2 right-2 p-1.5 bg-black/70 hover:bg-black/90 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <Download className="w-3 h-3 text-white" />
-              </a>
-            </div>
-            <div className="flex gap-2 mt-2">
-              <button
-                onClick={() => window.open(msg.mediaUrl!, '_blank')}
-                className="flex-1 flex items-center justify-center gap-1 p-1.5 bg-black/20 rounded hover:bg-black/30 transition text-xs"
-              >
-                <ImageIcon className="w-3 h-3" />
-                View Full
-              </button>
-              <a
-                href={msg.mediaUrl}
-                download
-                className="flex-1 flex items-center justify-center gap-1 p-1.5 bg-black/20 rounded hover:bg-black/30 transition text-xs"
-              >
-                <Download className="w-3 h-3" />
-                Download
-              </a>
-            </div>
-          </div>
-        );
-      case 'video':
-        return (
-          <div className="mt-2">
-            <video
+    const mediaType = msg.mediaType?.toLowerCase() || '';
+    
+    // Check if it's an image (supports various formats)
+    if (mediaType.includes('image') || mediaType === 'image' || /\.(jpg|jpeg|png|gif|webp)$/i.test(msg.mediaUrl)) {
+      return (
+        <div className="mt-2">
+          <div className="relative group">
+            <img
               src={msg.mediaUrl}
-              controls
-              className="max-w-full max-h-[300px] sm:max-h-[400px] rounded-lg"
+              alt="Shared image"
+              className="max-w-[200px] max-h-[150px] object-cover rounded-lg cursor-pointer hover:opacity-90 transition"
+              onClick={() => window.open(msg.mediaUrl!, '_blank')}
             />
             <a
               href={msg.mediaUrl}
               download
-              className="flex items-center justify-center gap-2 p-2 bg-black/20 rounded hover:bg-black/30 transition text-xs mt-2"
+              className="absolute top-2 right-2 p-1.5 bg-black/70 hover:bg-black/90 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={(e) => e.stopPropagation()}
             >
-              <Download className="w-3 h-3" />
-              Download Video
+              <Download className="w-3 h-3 text-white" />
             </a>
           </div>
-        );
-      case 'audio':
-        return (
-          <div className="mt-2">
-            <audio src={msg.mediaUrl} controls className="w-full" />
+          <div className="flex gap-2 mt-2">
+            <button
+              onClick={() => window.open(msg.mediaUrl!, '_blank')}
+              className="flex-1 flex items-center justify-center gap-1 p-1.5 bg-black/20 rounded hover:bg-black/30 transition text-xs"
+            >
+              <ImageIcon className="w-3 h-3" />
+              View Full
+            </button>
             <a
               href={msg.mediaUrl}
               download
-              className="flex items-center justify-center gap-2 p-2 bg-black/20 rounded hover:bg-black/30 transition text-xs mt-2"
+              className="flex-1 flex items-center justify-center gap-1 p-1.5 bg-black/20 rounded hover:bg-black/30 transition text-xs"
             >
               <Download className="w-3 h-3" />
-              Download Audio
+              Download
             </a>
           </div>
-        );
-      default:
-        return (
+        </div>
+      );
+    }
+    
+    // Check if it's a video
+    if (mediaType.includes('video') || mediaType === 'video' || /\.(mp4|webm|ogg|mov)$/i.test(msg.mediaUrl)) {
+      return (
+        <div className="mt-2">
+          <video
+            src={msg.mediaUrl}
+            controls
+            className="max-w-full max-h-[300px] sm:max-h-[400px] rounded-lg"
+          />
           <a
             href={msg.mediaUrl}
             download
-            className="mt-2 flex items-center gap-2 p-2 bg-black/20 rounded hover:bg-black/30 transition"
+            className="flex items-center justify-center gap-2 p-2 bg-black/20 rounded hover:bg-black/30 transition text-xs mt-2"
           >
-            <Download className="w-4 h-4" />
-            <span className="text-sm">Download {msg.mediaType}</span>
+            <Download className="w-3 h-3" />
+            Download Video
           </a>
-        );
+        </div>
+      );
     }
+    
+    // Check if it's audio
+    if (mediaType.includes('audio') || mediaType === 'audio' || /\.(mp3|wav|ogg|m4a)$/i.test(msg.mediaUrl)) {
+      return (
+        <div className="mt-2">
+          <audio src={msg.mediaUrl} controls className="w-full" />
+          <a
+            href={msg.mediaUrl}
+            download
+            className="flex items-center justify-center gap-2 p-2 bg-black/20 rounded hover:bg-black/30 transition text-xs mt-2"
+          >
+            <Download className="w-3 h-3" />
+            Download Audio
+          </a>
+        </div>
+      );
+    }
+    
+    // Default: document or other file type
+    return (
+      <a
+        href={msg.mediaUrl}
+        download
+        className="mt-2 flex items-center gap-2 p-2 bg-black/20 rounded hover:bg-black/30 transition"
+      >
+        <Download className="w-4 h-4" />
+        <span className="text-sm">Download {msg.mediaType || 'file'}</span>
+      </a>
+    );
   };
 
   const filteredContacts = contacts.filter(contact => 
@@ -409,11 +429,7 @@ export default function InboxPage() {
                             <p className="text-sm break-words">{msg.message}</p>
                           )}
                           
-                          {msg.mediaType && msg.mediaUrl && (
-                            <div className="mt-2">
-                              {renderMedia(msg)}
-                            </div>
-                          )}
+                          {msg.mediaUrl && renderMedia(msg)}
                           
                           {msg.mediaType && !msg.mediaUrl && (
                             <div className="flex items-center gap-2 text-xs opacity-75 mt-1">
