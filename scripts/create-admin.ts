@@ -6,9 +6,9 @@ import { eq } from 'drizzle-orm';
 
 async function createAdmin() {
   try {
-    const email = 'admin@subham.rf.gd';
+    const email = 'shubhamguptacoder@gmail.com';
     const password = '@Shubham123';
-    const fullname = 'Admin User';
+    const fullname = 'Shubham Gupta';
 
     // Check if admin already exists
     const existingUser = await db
