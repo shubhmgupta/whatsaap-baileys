@@ -1,7 +1,27 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Users, Plus, Edit, Trash, Search, X, Save, UserPlus, Upload, ChevronLeft, ChevronRight } from 'lucide-react';
+import { 
+  Users, 
+  Plus, 
+  Edit, 
+  Trash2, 
+  Search, 
+  X, 
+  Save, 
+  UserPlus, 
+  Upload, 
+  ChevronLeft, 
+  ChevronRight,
+  Phone,
+  Calendar,
+  AlertCircle,
+  CheckCircle2,
+  FileSpreadsheet,
+  Loader2,
+  Sparkles,
+  ArrowRight
+} from 'lucide-react';
 
 export default function ContactsPage() {
   const [user, setUser] = useState<any>(null);
@@ -36,7 +56,7 @@ export default function ContactsPage() {
       const delaySearch = setTimeout(() => {
         setCurrentPage(1);
         loadContacts(user.id, 1, searchTerm);
-      }, 500);
+      }, 400);
       return () => clearTimeout(delaySearch);
     }
   }, [searchTerm]);
@@ -86,10 +106,9 @@ export default function ContactsPage() {
       const data = await res.json();
 
       if (res.ok) {
-        setSuccess(`Import successful! ${data.createdCount} new contacts added.`);
-        setImportResult({ createdCount: data.createdCount, skippedCount: data.skippedCount });
+        setSuccess(`Import complete: ${data.createdCount} added, ${data.skippedCount || 0} skipped.`);
+        setImportResult({ createdCount: data.createdCount, skippedCount: data.skippedCount || 0 });
         loadContacts(user.id, 1, searchTerm);
-        // Do not close modal, show results instead
       } else {
         setError(data.error || 'An error occurred during import.');
       }
@@ -121,14 +140,14 @@ export default function ContactsPage() {
       const data = await res.json();
 
       if (res.ok) {
-        setSuccess(selectedContact ? 'Contact updated successfully!' : 'Contact created successfully!');
+        setSuccess(selectedContact ? 'Contact updated successfully!' : 'Contact saved successfully!');
         loadContacts(user.id, currentPage, searchTerm);
         closeModal();
       } else {
-        setError(data.error || 'An error occurred.');
+        setError(data.error || 'Failed to save contact.');
       }
     } catch (err) {
-      setError('An unexpected error occurred.');
+      setError('An unexpected network error occurred.');
     }
   };
 
@@ -195,92 +214,157 @@ export default function ContactsPage() {
   };
 
   return (
-    <div className="p-6 lg:p-8">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+      {/* Header Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-800">
         <div>
-          <h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">
-            <Users className="w-8 h-8 text-blue-400" />
+          <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium mb-2">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Audience Directory</span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight flex items-center gap-3">
             Manage Contacts
           </h1>
-          <p className="text-gray-400">View, create, edit, and delete your contacts</p>
+          <p className="text-sm text-slate-400 mt-1">
+            Build and organize your customer contact lists for broadcast campaigns and direct chats.
+          </p>
         </div>
-        <div className="flex items-center gap-4 mt-4 md:mt-0">
+
+        <div className="flex items-center gap-3">
           <button
             onClick={openImportModal}
-            className="bg-gray-700 text-white px-6 py-3 rounded-xl font-medium hover:bg-gray-600 transition-all flex items-center gap-2"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white font-semibold text-xs transition cursor-pointer"
           >
-            <Upload className="w-5 h-5" />
-            Import
+            <Upload className="w-4 h-4 text-emerald-400" />
+            <span>Import Excel / CSV</span>
           </button>
           <button
             onClick={() => openModal()}
-            className="bg-gradient-to-r from-green-500 to-blue-600 text-white px-6 py-3 rounded-xl font-medium hover:from-green-600 hover:to-blue-700 transition-all flex items-center gap-2"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold text-xs shadow-lg shadow-emerald-500/20 transition cursor-pointer"
           >
-            <UserPlus className="w-5 h-5" />
-            Create Contact
+            <UserPlus className="w-4 h-4" />
+            <span>Add Contact</span>
           </button>
         </div>
       </div>
 
-      {/* Search and Filters */}
-      <div className="mb-6">
-        <div className="relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search contacts by name or phone number..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-gray-800/50 border border-gray-700/50 rounded-xl pl-12 pr-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+      {/* Alert Banners */}
+      {error && (
+        <div className="flex items-start justify-between gap-3 p-4 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-sm animate-in fade-in">
+          <div className="flex items-center gap-2.5">
+            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+          <button onClick={() => setError('')} className="p-0.5 text-rose-400 hover:text-rose-300">
+            <X className="w-4 h-4" />
+          </button>
         </div>
+      )}
+
+      {success && (
+        <div className="flex items-start justify-between gap-3 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-400 text-sm animate-in fade-in">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+            <span>{success}</span>
+          </div>
+          <button onClick={() => setSuccess('')} className="p-0.5 text-emerald-400 hover:text-emerald-300">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Search Input Bar */}
+      <div className="relative">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+        <input
+          type="text"
+          placeholder="Search contacts by name or phone number..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-xl pl-11 pr-10 py-3 text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 transition"
+        />
+        {searchTerm && (
+          <button
+            onClick={() => setSearchTerm('')}
+            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
-      {/* Contacts Table */}
-      <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700/50 overflow-hidden">
-        <div className="overflow-x-auto">
+      {/* Contacts Table & Responsive Cards */}
+      <div className="bg-slate-900/60 backdrop-blur-xl rounded-2xl border border-slate-800 shadow-xl overflow-hidden">
+        {/* Desktop / Tablet Table View */}
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full text-left">
-            <thead className="bg-gray-900/50">
+            <thead className="bg-slate-800/40 border-b border-slate-800 text-xs font-semibold text-slate-400 uppercase tracking-wider">
               <tr>
-                <th className="p-4 text-sm font-semibold text-gray-300">Name</th>
-                <th className="p-4 text-sm font-semibold text-gray-300">Phone Number</th>
-                <th className="p-4 text-sm font-semibold text-gray-300">Last Contacted</th>
-                <th className="p-4 text-sm font-semibold text-gray-300 text-right">Actions</th>
+                <th className="py-3.5 px-6">Contact</th>
+                <th className="py-3.5 px-6">Phone Number</th>
+                <th className="py-3.5 px-6">Last Active</th>
+                <th className="py-3.5 px-6 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-slate-800/70 text-sm">
               {loading ? (
                 <tr>
-                  <td colSpan={4} className="p-8 text-center text-gray-400">
-                    Loading contacts...
+                  <td colSpan={4} className="py-12 text-center text-slate-400">
+                    <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-emerald-400" />
+                    <span>Loading directory...</span>
                   </td>
                 </tr>
               ) : contacts.length === 0 ? (
                 <tr>
-                  <td colSpan={4}>
-                    <div className="text-center py-12">
-                      <Users className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                      <p className="text-gray-400">No contacts found</p>
-                      <p className="text-gray-500 text-sm mt-1">Create a new contact or adjust your search</p>
-                    </div>
+                  <td colSpan={4} className="py-16 text-center">
+                    <Users className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+                    <p className="text-white font-medium text-sm">No contacts found</p>
+                    <p className="text-xs text-slate-500 mt-1">Add a new contact or upload an Excel spreadsheet</p>
                   </td>
                 </tr>
               ) : (
                 contacts.map((contact) => (
-                  <tr key={contact.id} className="border-b border-gray-700/50 hover:bg-gray-700/20 transition-colors">
-                    <td className="p-4 text-white font-medium">{contact.name}</td>
-                    <td className="p-4 text-gray-400">+{contact.phoneNumber}</td>
-                    <td className="p-4 text-gray-400">
-                      {contact.lastMessageAt ? new Date(contact.lastMessageAt).toLocaleDateString() : 'N/A'}
+                  <tr key={contact.id} className="hover:bg-slate-800/30 transition group">
+                    <td className="py-4 px-6">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-xs text-emerald-400 group-hover:bg-emerald-500 group-hover:text-black transition flex-shrink-0">
+                          {(contact.name || contact.phoneNumber).charAt(0).toUpperCase()}
+                        </div>
+                        <span className="font-semibold text-white group-hover:text-emerald-300 transition">
+                          {contact.name || 'Unnamed Contact'}
+                        </span>
+                      </div>
                     </td>
-                    <td className="p-4 text-right space-x-2">
-                      <button onClick={() => openModal(contact)} className="text-blue-400 hover:text-blue-300 p-2 rounded-md hover:bg-blue-500/10">
-                        <Edit className="w-5 h-5" />
-                      </button>
-                      <button onClick={() => openDeleteModal(contact)} className="text-red-400 hover:text-red-300 p-2 rounded-md hover:bg-red-500/10">
-                        <Trash className="w-5 h-5" />
-                      </button>
+                    <td className="py-4 px-6 font-mono text-slate-300 text-xs">
+                      +{contact.phoneNumber}
+                    </td>
+                    <td className="py-4 px-6 text-xs text-slate-400">
+                      {contact.lastMessageAt ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                          <span>{new Date(contact.lastMessageAt).toLocaleDateString()}</span>
+                        </span>
+                      ) : (
+                        <span className="text-slate-600 italic">Never</span>
+                      )}
+                    </td>
+                    <td className="py-4 px-6 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => openModal(contact)}
+                          className="p-2 text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition"
+                          title="Edit Contact"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => openDeleteModal(contact)}
+                          className="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition"
+                          title="Delete Contact"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -289,93 +373,151 @@ export default function ContactsPage() {
           </table>
         </div>
 
-        {/* Pagination */}
+        {/* Mobile Card List View */}
+        <div className="sm:hidden divide-y divide-slate-800">
+          {loading ? (
+            <div className="p-8 text-center text-slate-400">
+              <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-emerald-400" />
+              <span>Loading...</span>
+            </div>
+          ) : contacts.length === 0 ? (
+            <div className="p-8 text-center">
+              <Users className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+              <p className="text-white text-sm font-semibold">No contacts found</p>
+            </div>
+          ) : (
+            contacts.map((contact) => (
+              <div key={contact.id} className="p-4 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center font-bold text-xs text-emerald-400 flex-shrink-0">
+                    {(contact.name || contact.phoneNumber).charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-white">{contact.name || 'Unnamed'}</p>
+                    <p className="text-xs text-slate-400 font-mono">+{contact.phoneNumber}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => openModal(contact)}
+                    className="p-2 text-slate-400 hover:text-white rounded-lg bg-slate-800"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => openDeleteModal(contact)}
+                    className="p-2 text-rose-400 hover:text-rose-300 rounded-lg bg-slate-800"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Pagination Bar */}
         {pagination && pagination.totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-4 border-t border-gray-700/50">
-            <div className="text-sm text-gray-400">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 border-t border-slate-800 bg-slate-900/40 text-xs">
+            <div className="text-slate-400">
               Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, pagination.total)} of {pagination.total} contacts
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <button
                 onClick={() => handlePageChange(currentPage - 1)}
                 disabled={currentPage === 1}
-                className="p-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition"
               >
-                <ChevronLeft className="w-5 h-5" />
+                <ChevronLeft className="w-4 h-4" />
               </button>
-              <div className="flex gap-1">
-                {Array.from({ length: pagination.totalPages }, (_, i) => i + 1).map((page) => (
-                  <button
-                    key={page}
-                    onClick={() => handlePageChange(page)}
-                    className={`px-3 py-1 rounded-lg text-sm ${
-                      currentPage === page
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                    }`}
-                  >
-                    {page}
-                  </button>
-                ))}
-              </div>
+              {Array.from({ length: pagination.totalPages }, (_, i) => i + 1).map((page) => (
+                <button
+                  key={page}
+                  onClick={() => handlePageChange(page)}
+                  className={`px-3 py-1.5 rounded-lg font-semibold transition ${
+                    currentPage === page
+                      ? 'bg-emerald-500 text-black shadow-md'
+                      : 'bg-slate-800 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {page}
+                </button>
+              ))}
               <button
                 onClick={() => handlePageChange(currentPage + 1)}
                 disabled={currentPage === pagination.totalPages}
-                className="p-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition"
               >
-                <ChevronRight className="w-5 h-5" />
+                <ChevronRight className="w-4 h-4" />
               </button>
             </div>
           </div>
         )}
       </div>
 
-      {/* Create/Edit Modal */}
+      {/* ================= MODAL: Create / Edit Contact ================= */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-md">
-            <div className="flex items-center justify-between p-4 border-b border-gray-700">
-              <h2 className="text-xl font-bold text-white">
-                {selectedContact ? 'Edit Contact' : 'Create Contact'}
-              </h2>
-              <button onClick={closeModal} className="text-gray-400 hover:text-white">
-                <X className="w-6 h-6" />
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between p-5 border-b border-slate-800">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <UserPlus className="w-5 h-5 text-emerald-400" />
+                <span>{selectedContact ? 'Edit Contact' : 'Create Contact'}</span>
+              </h3>
+              <button onClick={closeModal} className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800">
+                <X className="w-5 h-5" />
               </button>
             </div>
+
             <form onSubmit={handleCreateOrUpdate} className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Name</label>
+                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                  Full Name
+                </label>
                 <input
                   type="text"
                   required
+                  placeholder="e.g. John Doe"
                   value={selectedContact ? selectedContact.name : newContact.name}
                   onChange={(e) => selectedContact 
                     ? setSelectedContact({ ...selectedContact, name: e.target.value }) 
                     : setNewContact({ ...newContact, name: e.target.value })}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
+
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Phone Number</label>
+                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                  Phone Number (with Country Code)
+                </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g., 919876543210"
+                  placeholder="e.g. 919876543210 (no + or spaces)"
                   value={selectedContact ? selectedContact.phoneNumber : newContact.phoneNumber}
                   onChange={(e) => selectedContact 
                     ? setSelectedContact({ ...selectedContact, phoneNumber: e.target.value }) 
                     : setNewContact({ ...newContact, phoneNumber: e.target.value })}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
-              {error && <p className="text-red-400 text-sm">{error}</p>}
-              <div className="flex justify-end gap-3 pt-4">
-                <button type="button" onClick={closeModal} className="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded-lg">
+
+              {error && <p className="text-rose-400 text-xs">{error}</p>}
+
+              <div className="flex justify-end gap-3 pt-3">
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition"
+                >
                   Cancel
                 </button>
-                <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2">
-                  <Save className="w-5 h-5" />
-                  {selectedContact ? 'Save Changes' : 'Create'}
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-md shadow-emerald-500/20 transition cursor-pointer"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{selectedContact ? 'Update Contact' : 'Save Contact'}</span>
                 </button>
               </div>
             </form>
@@ -383,50 +525,80 @@ export default function ContactsPage() {
         </div>
       )}
 
-      {/* Import Modal */}
+      {/* ================= MODAL: Import Excel / CSV ================= */}
       {isImportModalOpen && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-md">
-            <div className="flex items-center justify-between p-4 border-b border-gray-700">
-              <h2 className="text-xl font-bold text-white">Import Contacts from Excel</h2>
-              <button onClick={closeImportModal} className="text-gray-400 hover:text-white">
-                <X className="w-6 h-6" />
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between p-5 border-b border-slate-800">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <FileSpreadsheet className="w-5 h-5 text-emerald-400" />
+                <span>Import Contacts via Excel</span>
+              </h3>
+              <button onClick={closeImportModal} className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800">
+                <X className="w-5 h-5" />
               </button>
             </div>
+
             <form onSubmit={handleImport} className="p-6">
               {!importResult ? (
-                <>
-                  <p className="text-gray-400 mb-4 text-sm">
-                    Upload an .xlsx or .csv file with "Name" and "Phone Number" columns.
+                <div className="space-y-4">
+                  <p className="text-slate-400 text-xs leading-relaxed">
+                    Upload an <strong>.xlsx</strong> or <strong>.csv</strong> file. The file should contain column headers for <strong>Name</strong> and <strong>Phone Number</strong>.
                   </p>
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Excel File</label>
+                    <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+                      Spreadsheet File
+                    </label>
                     <input
                       type="file"
                       required
                       accept=".xlsx, .csv"
                       onChange={(e) => setImportFile(e.target.files ? e.target.files[0] : null)}
-                      className="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700"
+                      className="w-full text-xs text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-500 file:cursor-pointer"
                     />
                   </div>
-                  {error && <p className="text-red-400 text-sm mt-4">{error}</p>}
-                  <div className="flex justify-end gap-3 pt-6">
-                    <button type="button" onClick={closeImportModal} className="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded-lg">
+                  {error && <p className="text-rose-400 text-xs">{error}</p>}
+                  <div className="flex justify-end gap-3 pt-4">
+                    <button
+                      type="button"
+                      onClick={closeImportModal}
+                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition"
+                    >
                       Cancel
                     </button>
-                    <button type="submit" disabled={!importFile || importing} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 disabled:opacity-50">
-                      {importing ? 'Importing...' : 'Import'}
+                    <button
+                      type="submit"
+                      disabled={!importFile || importing}
+                      className="px-5 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold rounded-xl text-xs flex items-center gap-2 disabled:opacity-50 transition cursor-pointer"
+                    >
+                      {importing ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Importing...</span>
+                        </>
+                      ) : (
+                        <span>Upload & Import</span>
+                      )}
                     </button>
                   </div>
-                </>
+                </div>
               ) : (
-                <div className="text-center">
-                    <h3 className="text-lg font-semibold text-white mb-2">Import Complete</h3>
-                    <p className="text-green-400 mb-1">{importResult.createdCount} contacts were successfully added.</p>
-                    <p className="text-yellow-400 mb-6">{importResult.skippedCount} contacts were skipped (duplicates).</p>
-                    <button onClick={closeImportModal} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg">
-                      Done
-                    </button>
+                <div className="text-center py-4 space-y-4">
+                  <div className="w-12 h-12 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center mx-auto text-emerald-400">
+                    <CheckCircle2 className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-bold text-white">Import Complete</h4>
+                    <p className="text-xs text-emerald-400 mt-1 font-medium">{importResult.createdCount} new contacts registered</p>
+                    <p className="text-xs text-slate-500 mt-0.5">{importResult.skippedCount} duplicate numbers skipped</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeImportModal}
+                    className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 text-black font-bold rounded-xl text-xs transition"
+                  >
+                    Done
+                  </button>
                 </div>
               )}
             </form>
@@ -434,25 +606,35 @@ export default function ContactsPage() {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
+      {/* ================= MODAL: Delete Confirmation ================= */}
       {isDeleteModalOpen && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-md">
-            <div className="p-6 text-center">
-              <Trash className="w-12 h-12 text-red-500 mx-auto mb-4" />
-              <h2 className="text-xl font-bold text-white mb-2">Delete Contact?</h2>
-              <p className="text-gray-400 mb-6">
-                Are you sure you want to delete "{selectedContact?.name}"? This action cannot be undone.
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-sm shadow-2xl p-6 text-center space-y-4">
+            <div className="w-12 h-12 rounded-full bg-rose-500/10 border border-rose-500/20 flex items-center justify-center mx-auto text-rose-400">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white">Delete Contact?</h3>
+              <p className="text-xs text-slate-400 mt-1">
+                Are you sure you want to remove <strong>{selectedContact?.name || selectedContact?.phoneNumber}</strong>?
               </p>
-              {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
-              <div className="flex justify-center gap-4">
-                <button onClick={closeDeleteModal} className="bg-gray-600 hover:bg-gray-500 text-white px-6 py-2 rounded-lg">
-                  Cancel
-                </button>
-                <button onClick={handleDelete} className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg">
-                  Delete
-                </button>
-              </div>
+            </div>
+            {error && <p className="text-rose-400 text-xs">{error}</p>}
+            <div className="flex gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={closeDeleteModal}
+                className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="flex-1 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs transition"
+              >
+                Delete
+              </button>
             </div>
           </div>
         </div>
