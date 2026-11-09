@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const [newPlan] = await db
+    const [result] = await db
       .insert(plans)
       .values({
         name,
@@ -75,7 +75,11 @@ export async function POST(request: NextRequest) {
         discountLabel: discountLabel || null,
         active: active !== undefined ? active : true,
       })
-      .returning();
+      .$returningId();
+
+    const newPlan = await db.query.plans.findFirst({
+      where: eq(plans.id, result.id),
+    });
 
     return NextResponse.json(newPlan, { status: 201 });
   } catch (error) {

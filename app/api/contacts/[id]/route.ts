@@ -35,12 +35,16 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
         return NextResponse.json({ error: 'Another contact with this phone number already exists.' }, { status: 409 });
     }
 
-    const updatedContact = await db.update(contacts).set({
+    await db.update(contacts).set({
       name,
       phoneNumber,
-    }).where(eq(contacts.id, contactId)).returning();
+    }).where(eq(contacts.id, contactId));
 
-    return NextResponse.json({ contact: updatedContact[0] });
+    const updatedContact = await db.query.contacts.findFirst({
+      where: eq(contacts.id, contactId),
+    });
+
+    return NextResponse.json({ contact: updatedContact });
   } catch (error) {
     console.error('Failed to update contact:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

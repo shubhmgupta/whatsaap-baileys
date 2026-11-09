@@ -201,17 +201,23 @@ export async function POST(request: Request) {
     });
 
     if (!contact) {
-      const [newContact] = await db.insert(contacts).values({
+      const [result] = await db.insert(contacts).values({
         userId,
         phoneNumber,
         name: phoneNumber,
         lastMessageAt: new Date(),
-      }).returning();
-      contact = newContact;
+      }).$returningId();
+      contact = await db.query.contacts.findFirst({
+        where: eq(contacts.id, result.id),
+      });
     } else {
       await db.update(contacts)
         .set({ lastMessageAt: new Date() })
         .where(eq(contacts.id, contact.id));
+    }
+
+    if (!contact) {
+      throw new Error('Failed to create contact');
     }
 
     // Save chat message

@@ -995,7 +995,7 @@ async function createBaileysSession(userId: string) {
             });
 
             if (!contact) {
-              const [newContact] = await db
+              const [result] = await db
                 .insert(contacts)
                 .values({
                   userId: parseInt(userId),
@@ -1003,8 +1003,10 @@ async function createBaileysSession(userId: string) {
                   name: contactName,
                   lastMessageAt: new Date(),
                 })
-                .returning();
-              contact = newContact;
+                .$returningId();
+              contact = await db.query.contacts.findFirst({
+                where: eq(contacts.id, result.id),
+              });
             } else {
               // Update contact name if we got a better one and last message time
               await db
@@ -1015,6 +1017,11 @@ async function createBaileysSession(userId: string) {
                   lastMessageAt: new Date(),
                 })
                 .where(eq(contacts.id, contact.id));
+            }
+
+            if (!contact) {
+              console.error("Could not find or create contact for message");
+              return;
             }
 
             // Save the message
@@ -1036,9 +1043,9 @@ async function createBaileysSession(userId: string) {
             console.log('   - Media Type:', messageData.mediaType);
             console.log('   - Media URL:', messageData.mediaUrl);
             
-            const [savedMessage] = await db.insert(chatMessages).values(messageData).returning();
+            const [savedResult] = await db.insert(chatMessages).values(messageData).$returningId();
             
-            console.log('   ✅ Message saved with ID:', savedMessage.id);
+            console.log('   ✅ Message saved with ID:', savedResult.id);
             console.log("📨 Received message from:", senderNumber);
           }
         } catch (error) {

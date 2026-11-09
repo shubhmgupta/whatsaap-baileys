@@ -39,7 +39,10 @@ export async function POST(request: Request) {
     }
 
     const token = randomBytes(32).toString('hex');
-    const [newToken] = await db.insert(apiTokens).values({ userId, token }).returning();
+    const [result] = await db.insert(apiTokens).values({ userId, token }).$returningId();
+    const newToken = await db.query.apiTokens.findFirst({
+      where: eq(apiTokens.id, result.id),
+    });
 
     return NextResponse.json({ token: newToken });
   } catch (error) {

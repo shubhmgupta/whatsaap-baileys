@@ -47,8 +47,8 @@ export async function POST(req: NextRequest) {
 
     let createdCount = 0;
     if (contactsToInsert.length > 0) {
-      const result = await db.insert(contacts).values(contactsToInsert).returning();
-      createdCount = result.length;
+      await db.insert(contacts).values(contactsToInsert);
+      createdCount = contactsToInsert.length;
     }
     
     const skippedCount = newContacts.length - createdCount;

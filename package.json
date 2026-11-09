@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start -p 3007",
     "lint": "eslint",
-    "db:push": "drizzle-kit push:pg"
+    "db:push": "drizzle-kit push"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
@@ -23,12 +23,11 @@
     "highlight.js": "^11.11.1",
     "jose": "^6.1.1",
     "lucide-react": "^0.553.0",
+    "mysql2": "^3.24.6",
     "next": "16.0.10",
     "nodemailer": "^7.0.10",
-    "pg": "^8.16.3",
     "pino": "^10.1.0",
     "pm2": "^6.0.14",
-    "postgres": "^3.4.7",
     "prismjs": "^1.30.0",
     "qrcode": "^1.5.4",
     "react": "19.2.0",

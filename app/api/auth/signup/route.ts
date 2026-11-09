@@ -25,7 +25,7 @@ export async function POST(request: Request) {
             password: hashedPassword, 
             phoneNumber,
             credits: 10 // Give 10 free credits to new users
-        }).returning();
+        }).$returningId();
 
         const token = randomBytes(32).toString('hex');
         const expiresAt = new Date(Date.now() + 3600 * 1000); // 1 hour

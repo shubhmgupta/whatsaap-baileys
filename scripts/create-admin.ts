@@ -33,7 +33,7 @@ async function createAdmin() {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Create admin user
-    const [admin] = await db
+    const [result] = await db
       .insert(users)
       .values({
         fullname,
@@ -43,14 +43,14 @@ async function createAdmin() {
         credits: 10000, // Give admin 10000 credits
         emailVerified: new Date(), // Mark email as verified
       })
-      .returning();
+      .$returningId();
 
     console.log('✅ Admin user created successfully!');
     console.log('📧 Email:', email);
-    console.log('👤 ID:', admin.id);
-    console.log('💳 Credits:', admin.credits);
+    console.log('👤 ID:', result.id);
+    console.log('💳 Credits: 10000');
     console.log('✓ Email verified');
-    
+
     process.exit(0);
   } catch (error) {
     console.error('❌ Error creating admin user:', error);

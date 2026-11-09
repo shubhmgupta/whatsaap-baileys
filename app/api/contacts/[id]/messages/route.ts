@@ -43,7 +43,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             return NextResponse.json({ error: 'User ID and phone number are required' }, { status: 400 });
         }
 
-        const [newMessage] = await db
+        const [result] = await db
             .insert(chatMessages)
             .values({
                 userId,
@@ -54,7 +54,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
                 mediaType,
                 isFromMe: isFromMe !== undefined ? isFromMe : true,
             })
-            .returning();
+            .$returningId();
+
+        const newMessage = await db.query.chatMessages.findFirst({
+            where: eq(chatMessages.id, result.id),
+        });
 
         return NextResponse.json({ message: newMessage });
     } catch (error) {

@@ -57,29 +57,31 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
     }
 
-    let updatedUser;
+    const userId = parseInt(id);
 
     if (operation === 'add') {
       // Add credits to existing balance
-      [updatedUser] = await db
+      await db
         .update(users)
         .set({
           credits: sql`${users.credits} + ${parsedAmount}`,
         })
-        .where(eq(users.id, parseInt(id)))
-        .returning();
+        .where(eq(users.id, userId));
     } else if (operation === 'set') {
       // Set credits to specific amount
-      [updatedUser] = await db
+      await db
         .update(users)
         .set({
           credits: parsedAmount,
         })
-        .where(eq(users.id, parseInt(id)))
-        .returning();
+        .where(eq(users.id, userId));
     } else {
       return NextResponse.json({ error: 'Invalid operation' }, { status: 400 });
     }
+
+    const updatedUser = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+    });
 
     if (!updatedUser) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });

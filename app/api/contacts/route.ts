@@ -76,13 +76,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'A contact with this phone number already exists.' }, { status: 409 });
     }
 
-    const newContact = await db.insert(contacts).values({
+    const [result] = await db.insert(contacts).values({
       name,
       phoneNumber,
       userId,
-    }).returning();
+    }).$returningId();
 
-    return NextResponse.json({ contact: newContact[0] }, { status: 201 });
+    const createdContact = await db.query.contacts.findFirst({
+      where: eq(contacts.id, result.id),
+    });
+
+    return NextResponse.json({ contact: createdContact }, { status: 201 });
   } catch (error) {
     console.error('Failed to create contact:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

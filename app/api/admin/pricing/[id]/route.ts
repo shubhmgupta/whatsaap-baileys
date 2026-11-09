@@ -47,7 +47,8 @@ export async function PUT(
     const body = await request.json();
     const { name, price, credits, features, discountPercentage, discountLabel, active } = body;
 
-    const [updatedPlan] = await db
+    const planId = parseInt(id);
+    await db
       .update(plans)
       .set({
         name,
@@ -58,8 +59,11 @@ export async function PUT(
         discountLabel: discountLabel || null,
         active,
       })
-      .where(eq(plans.id, parseInt(id)))
-      .returning();
+      .where(eq(plans.id, planId));
+
+    const updatedPlan = await db.query.plans.findFirst({
+      where: eq(plans.id, planId),
+    });
 
     if (!updatedPlan) {
       return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
