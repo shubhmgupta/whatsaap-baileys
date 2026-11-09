@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import { contacts } from '@/db/schema';
+import { contacts, users } from '@/db/schema';
 import { eq, and, or, like, sql, desc } from 'drizzle-orm';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -16,9 +16,20 @@ export async function GET(req: NextRequest) {
 
   try {
     const offset = (page - 1) * limit;
+    const userIdNum = parseInt(userId, 10);
     
     // Build where conditions
-    const conditions = [eq(contacts.userId, parseInt(userId, 10))];
+    const conditions = [eq(contacts.userId, userIdNum)];
+
+    // Exclude the user's currently connected phone number from the contacts list
+    const userRecord = await db.query.users.findFirst({
+      where: eq(users.id, userIdNum),
+    });
+    const ownNumber = userRecord?.phoneNumber?.replace(/[^0-9]/g, '');
+    if (ownNumber && ownNumber.length >= 7) {
+      const ownLast10 = ownNumber.slice(-10);
+      conditions.push(sql`${contacts.phoneNumber} NOT LIKE ${'%' + ownLast10}`);
+    }
     
     if (search) {
       conditions.push(

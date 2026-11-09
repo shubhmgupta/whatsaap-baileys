@@ -5,6 +5,7 @@ import {
   LogOut, 
   Send, 
   Phone, 
+  Video,
   Image as ImageIcon, 
   File as FileIcon, 
   Loader2, 
@@ -994,7 +995,23 @@ export default function MessagesDashboard() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <a
+                    href={`tel:+${selectedContact.phoneNumber}`}
+                    className="p-1.5 text-slate-400 hover:text-emerald-400 rounded-lg hover:bg-slate-800 transition"
+                    title="Audio Call"
+                  >
+                    <Phone className="w-4 h-4" />
+                  </a>
+                  <a
+                    href={`https://wa.me/${selectedContact.phoneNumber}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1.5 text-slate-400 hover:text-cyan-400 rounded-lg hover:bg-slate-800 transition"
+                    title="Open in WhatsApp"
+                  >
+                    <Video className="w-4 h-4" />
+                  </a>
                   <button
                     onClick={() => loadChatMessages(selectedContact.id, selectedContact.phoneNumber)}
                     className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"

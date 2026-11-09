@@ -684,12 +684,65 @@ async function createBaileysSession(userId: string) {
             sessionData = JSON.stringify({ creds: state.creds });
           }
 
-          await db
-            .update(users)
-            .set({
-              whatsappSession: sessionData,
-            })
-            .where(eq(users.id, parseInt(userId)));
+          const rawConnectedId = sock.user?.id || "";
+          const newConnectedNumber = rawConnectedId.split(":")[0].replace(/[^0-9]/g, "");
+
+          if (newConnectedNumber) {
+            // Check if user previously had a different connected number
+            const userRecord = await db.query.users.findFirst({
+              where: eq(users.id, parseInt(userId)),
+            });
+
+            const oldConnectedNumber = userRecord?.phoneNumber?.replace(/[^0-9]/g, "");
+
+            if (oldConnectedNumber && oldConnectedNumber !== newConnectedNumber) {
+              console.log(`🔄 User ${userId} switched WhatsApp number from ${oldConnectedNumber} to ${newConnectedNumber}`);
+              const newLast10 = newConnectedNumber.slice(-10);
+
+              // If the user previously had a contact for newConnectedNumber, that contact was the other side!
+              // Re-map it to oldConnectedNumber so the user chats with the previous account
+              const counterpart = await db.query.contacts.findFirst({
+                where: and(
+                  eq(contacts.userId, parseInt(userId)),
+                  or(
+                    eq(contacts.phoneNumber, newConnectedNumber),
+                    sql`${contacts.phoneNumber} LIKE ${'%' + newLast10}`
+                  )
+                ),
+              });
+
+              if (counterpart) {
+                await db.update(contacts).set({
+                  phoneNumber: oldConnectedNumber,
+                  name: counterpart.name === counterpart.phoneNumber ? oldConnectedNumber : counterpart.name,
+                }).where(eq(contacts.id, counterpart.id));
+
+                // Invert isFromMe so sender/receiver alignment is preserved
+                await db.update(chatMessages).set({
+                  phoneNumber: oldConnectedNumber,
+                  isFromMe: sql`NOT is_from_me`,
+                }).where(and(
+                  eq(chatMessages.userId, parseInt(userId)),
+                  eq(chatMessages.contactId, counterpart.id)
+                ));
+              }
+            }
+
+            await db
+              .update(users)
+              .set({
+                whatsappSession: sessionData,
+                phoneNumber: newConnectedNumber,
+              })
+              .where(eq(users.id, parseInt(userId)));
+          } else {
+            await db
+              .update(users)
+              .set({
+                whatsappSession: sessionData,
+              })
+              .where(eq(users.id, parseInt(userId)));
+          }
 
           // Update in-memory session with all connection details
           sessions.set(userId, {
@@ -704,7 +757,7 @@ async function createBaileysSession(userId: string) {
           // Start heartbeat to keep connection alive
           startHeartbeat(userId, sock);
 
-          console.log(`💾 Session saved to database for user ${userId}`);
+          console.log(`💾 Session saved to database for user ${userId} (Phone: ${newConnectedNumber || 'unknown'})`);
         } catch (error) {
           console.error("Error updating session in database:", error);
         }
@@ -802,6 +855,13 @@ async function createBaileysSession(userId: string) {
 
         const last10 = partnerNumber.length >= 10 ? partnerNumber.slice(-10) : partnerNumber;
         const cleanPartner = partnerNumber.replace(/[^0-9]/g, '');
+
+        // SKIP messages to/from user's own connected WhatsApp number (self-chat / notes to self)
+        const ownNumber = sock.user?.id?.split(":")[0]?.replace(/[^0-9]/g, "") || "";
+        const ownLast10 = ownNumber.length >= 10 ? ownNumber.slice(-10) : ownNumber;
+        if (ownNumber && (cleanPartner === ownNumber || cleanPartner.endsWith(ownLast10))) {
+          return;
+        }
 
         // STRICT CHECK: ONLY proceed if this number is an ALREADY SAVED contact in the database for this user
         const contact = await db.query.contacts.findFirst({

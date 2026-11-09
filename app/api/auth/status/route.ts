@@ -19,8 +19,12 @@ export async function GET(request: Request) {
         
         console.log(`Status check for user ${userId}: connected=${connected}, hasSocket=${hasSocket}, isConnecting=${isConnecting}`);
         
+        const rawId = session?.sock?.user?.id || '';
+        const connectedPhoneNumber = rawId.split(':')[0]?.replace(/[^0-9]/g, '') || null;
+
         return NextResponse.json({ 
             connected,
+            connectedPhoneNumber,
             user: session?.sock?.user || null,
             socketExists: hasSocket,
             connecting: isConnecting,

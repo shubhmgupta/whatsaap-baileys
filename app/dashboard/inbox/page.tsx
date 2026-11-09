@@ -448,7 +448,23 @@ export default function InboxPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <a
+                    href={`tel:+${selectedContact.phoneNumber}`}
+                    className="p-2 text-slate-400 hover:text-emerald-400 rounded-xl hover:bg-slate-800 transition"
+                    title="Audio Call (Phone Dialer)"
+                  >
+                    <Phone className="w-4 h-4" />
+                  </a>
+                  <a
+                    href={`https://wa.me/${selectedContact.phoneNumber}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-2 text-slate-400 hover:text-cyan-400 rounded-xl hover:bg-slate-800 transition"
+                    title="WhatsApp Call / Direct App Link"
+                  >
+                    <Video className="w-4 h-4" />
+                  </a>
                   <button
                     onClick={() => loadMessages(selectedContact.id, selectedContact.phoneNumber)}
                     className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition"
