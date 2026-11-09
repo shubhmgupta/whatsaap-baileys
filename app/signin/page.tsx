@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Mail, Lock, AlertCircle } from 'lucide-react';
+import { Mail, Lock, AlertCircle, ArrowRight, Loader2 } from 'lucide-react';
 
 export default function SignIn() {
   const appName = process.env.NEXT_PUBLIC_APP_NAME || 'Codefy';
@@ -27,55 +27,57 @@ export default function SignIn() {
       const data = await res.json();
 
       if (res.ok) {
-        // Save user data to sessionStorage
         if (data.user) {
           sessionStorage.setItem('user', JSON.stringify(data.user));
         }
         
-        // Check for redirect parameter
         const urlParams = new URLSearchParams(window.location.search);
         const redirect = urlParams.get('redirect') || '/dashboard';
-        
-        // Redirect to intended page or dashboard
         window.location.href = redirect;
       } else {
         setError(data.error || 'Sign in failed');
       }
     } catch (err) {
-      setError('An error occurred. Please try again.');
+      setError('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-900 to-gray-800 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950 flex items-center justify-center p-4 antialiased text-white">
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <Link href="/" className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-green-400 to-blue-500">
-            {appName}
+          <Link href="/" className="inline-flex items-center gap-2 mb-3">
+            <span className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-cyan-500 flex items-center justify-center font-bold text-white shadow-lg shadow-emerald-500/20 text-lg">
+              W
+            </span>
+            <span className="text-2xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-cyan-400">
+              {appName}
+            </span>
           </Link>
-          <p className="text-gray-400 mt-2">Sign in to your account</p>
+          <h2 className="text-xl font-bold text-white">Welcome back</h2>
+          <p className="text-gray-400 text-sm mt-1">Sign in to your WhatsApp automation workspace</p>
         </div>
 
         {/* Sign In Form */}
-        <div className="bg-gray-800/50 backdrop-blur-sm p-8 rounded-2xl shadow-2xl border border-gray-700/50">
-          <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="bg-gray-900/70 backdrop-blur-xl p-8 rounded-2xl shadow-2xl border border-gray-800">
+          <form onSubmit={handleSubmit} className="space-y-5">
             {error && (
-              <div className="bg-red-500/10 border border-red-500/50 text-red-500 p-3 rounded-lg flex items-center">
-                <AlertCircle className="w-5 h-5 mr-2" />
-                {error}
+              <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-xl flex items-center gap-2 text-sm">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <span>{error}</span>
               </div>
             )}
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
+              <label htmlFor="email" className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-2">
                 Email Address
               </label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="w-5 h-5 text-gray-400" />
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-500">
+                  <Mail className="w-4 h-4" />
                 </div>
                 <input
                   id="email"
@@ -83,19 +85,24 @@ export default function SignIn() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 p-3 bg-gray-700/50 border border-gray-600/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition text-white"
-                  placeholder="you@example.com"
+                  className="w-full pl-10 pr-4 py-3 bg-gray-800/60 border border-gray-700/80 rounded-xl focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition text-sm text-white placeholder-gray-500"
+                  placeholder="admin@example.com"
                 />
               </div>
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
-                Password
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label htmlFor="password" className="block text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                  Password
+                </label>
+                <Link href="/forgot-password" className="text-xs text-emerald-400 hover:text-emerald-300 transition">
+                  Forgot password?
+                </Link>
+              </div>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="w-5 h-5 text-gray-400" />
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-500">
+                  <Lock className="w-4 h-4" />
                 </div>
                 <input
                   id="password"
@@ -103,51 +110,43 @@ export default function SignIn() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 p-3 bg-gray-700/50 border border-gray-600/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition text-white"
+                  className="w-full pl-10 pr-4 py-3 bg-gray-800/60 border border-gray-700/80 rounded-xl focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition text-sm text-white placeholder-gray-500"
                   placeholder="••••••••"
                 />
               </div>
             </div>
 
-            <div className="flex items-center justify-between text-sm">
-              <div className="flex items-center">
-                <input
-                  id="remember"
-                  type="checkbox"
-                  className="w-4 h-4 bg-gray-700 border-gray-600 rounded focus:ring-green-500"
-                />
-                <label htmlFor="remember" className="ml-2 text-gray-300">
-                  Remember me
-                </label>
-              </div>
-              <Link href="/forgot-password" className="text-green-400 hover:text-green-300 transition">
-                Forgot password?
-              </Link>
-            </div>
-
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-gradient-to-r from-green-500 to-blue-600 hover:from-green-600 hover:to-blue-700 text-white font-bold py-3 px-4 rounded-lg transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-semibold py-3 px-4 rounded-xl transition shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
             >
-              {loading ? 'Signing in...' : 'Sign In'}
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Authenticating...</span>
+                </>
+              ) : (
+                <>
+                  <span>Sign In</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
             </button>
           </form>
 
-          <div className="mt-6 text-center">
-            <p className="text-gray-400">
+          <div className="mt-6 pt-6 border-t border-gray-800 text-center">
+            <p className="text-sm text-gray-400">
               Don't have an account?{' '}
-              <Link href="/signup" className="text-green-400 hover:text-green-300 transition font-semibold">
-                Sign up
+              <Link href="/signup" className="text-emerald-400 hover:text-emerald-300 transition font-semibold">
+                Sign up free
               </Link>
             </p>
           </div>
         </div>
 
-        <p className="text-center text-gray-500 text-sm mt-8">
-          By signing in, you agree to our{' '}
-          <a href="#" className="text-gray-400 hover:text-white transition">Terms</a> and{' '}
-          <a href="#" className="text-gray-400 hover:text-white transition">Privacy Policy</a>
+        <p className="text-center text-gray-500 text-xs mt-6">
+          Protected by end-to-end token authentication and AES-256 session encryption.
         </p>
       </div>
     </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Check, Zap, Star, Crown } from 'lucide-react';
+import { Check, Zap, Star, Crown, Shield, ArrowRight, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 
 interface Plan {
@@ -21,22 +21,18 @@ const iconMap: Record<number, any> = {
   2: Crown,
 };
 
-const colorMap: Record<number, string> = {
-  0: 'from-blue-500 to-cyan-600',
-  1: 'from-purple-500 to-pink-600',
-  2: 'from-orange-500 to-red-600',
+const gradientMap: Record<number, string> = {
+  0: 'from-blue-500 to-cyan-500',
+  1: 'from-emerald-500 to-teal-500',
+  2: 'from-purple-500 to-pink-500',
 };
 
 export default function PricingPage() {
-  console.log('PricingPage component rendered');
-  
   const [user, setUser] = useState<any>(null);
   const [pricingPlans, setPricingPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    console.log('useEffect running');
-    
     if (typeof window !== 'undefined') {
       const userData = sessionStorage.getItem('user');
       if (userData) {
@@ -44,21 +40,12 @@ export default function PricingPage() {
       }
     }
 
-    // Fetch plans from API
-    console.log('Fetching from /api/pricing');
     fetch('/api/pricing')
-      .then((res) => {
-        console.log('Response received:', res.status);
-        return res.json();
-      })
+      .then((res) => res.json())
       .then((data) => {
-        console.log('=== PRICING PAGE DATA ===');
-        console.log('Full data:', JSON.stringify(data, null, 2));
-        if (data && data.length > 0) {
-          console.log('First plan price:', data[0].price);
-          console.log('First plan price type:', typeof data[0].price);
+        if (Array.isArray(data)) {
+          setPricingPlans(data);
         }
-        setPricingPlans(data);
         setLoading(false);
       })
       .catch((error) => {
@@ -69,99 +56,153 @@ export default function PricingPage() {
 
   const handlePurchase = async (planId: number) => {
     if (!user) {
-      alert('Please login to purchase credits');
-      window.location.href = '/login';
+      window.location.href = `/signin?redirect=/pricing`;
       return;
     }
 
-    // TODO: Integrate with payment gateway (Razorpay/PhonePe)
-    alert('Payment integration coming soon! Contact admin for manual credit assignment.');
+    try {
+      const response = await fetch('/api/payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ planId, userId: user.id }),
+      });
+
+      const data = await response.json();
+      if (data.paymentUrl) {
+        window.location.href = data.paymentUrl;
+      } else {
+        alert(data.message || 'Payment initiated. Please check your billing dashboard.');
+      }
+    } catch (error) {
+      console.error('Payment error:', error);
+      alert('Failed to initiate payment. Please try again.');
+    }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-      <div className="max-w-7xl mx-auto px-4 py-12 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
-            Simple, Transparent Pricing
+    <div className="min-h-screen bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950 text-white antialiased">
+      {/* Top Navbar */}
+      <header className="sticky top-0 z-50 bg-gray-950/80 backdrop-blur-md border-b border-gray-800/80">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <Link href="/" className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white transition">
+            <ArrowLeft className="w-4 h-4" />
+            <span>Back to Home</span>
+          </Link>
+          <div className="flex items-center gap-4">
+            {user ? (
+              <Link
+                href="/dashboard"
+                className="px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 text-sm font-semibold transition"
+              >
+                Dashboard
+              </Link>
+            ) : (
+              <>
+                <Link href="/signin" className="text-sm font-medium text-gray-300 hover:text-white transition">
+                  Sign In
+                </Link>
+                <Link
+                  href="/signup"
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-sm font-semibold shadow-lg shadow-emerald-500/20 transition"
+                >
+                  Get Started
+                </Link>
+              </>
+            )}
+          </div>
+        </div>
+      </header>
+
+      <div className="max-w-7xl mx-auto px-4 py-16 sm:px-6 lg:px-8">
+        {/* Header Title */}
+        <div className="text-center max-w-3xl mx-auto mb-16">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold mb-4">
+            <Shield className="w-3.5 h-3.5" />
+            Flexible Pay-Per-Message Credits
+          </div>
+          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-white mb-4">
+            Predictable, Transparent Pricing
           </h1>
-          <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-            Choose the perfect plan for your messaging needs. Pay only for what you use.
+          <p className="text-lg text-gray-400">
+            Recharge your account with credits that never expire. Pay only for what you send.
           </p>
         </div>
 
         {/* Pricing Cards */}
         {loading ? (
-          <div className="flex items-center justify-center h-64 mb-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <div className="flex items-center justify-center h-64 mb-16">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500"></div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-20 items-stretch">
             {pricingPlans.map((plan, index) => {
               const Icon = iconMap[index % 3] || Zap;
-              const color = colorMap[index % 3] || 'from-blue-500 to-cyan-600';
-              const isPopular = plan.discountLabel && plan.discountLabel.toLowerCase().includes('popular');
+              const gradient = gradientMap[index % 3] || 'from-emerald-500 to-teal-500';
+              const isPopular = plan.discountLabel?.toLowerCase().includes('popular') || index === 1;
               const features = plan.features 
-                ? plan.features.split('\n').filter(f => f.trim())
-                : [`${plan.credits} Message Credits`, 'WhatsApp Integration', 'API Access', 'Support'];
+                ? plan.features.split('\n').filter((f) => f.trim())
+                : [`${plan.credits} Message Credits`, 'WhatsApp Web Integration', 'REST API Access', 'Basic Analytics'];
 
               return (
                 <div
                   key={plan.id}
-                  className={`relative bg-gray-800/50 backdrop-blur-sm rounded-2xl border ${
-                    isPopular ? 'border-purple-500/50 shadow-lg shadow-purple-500/20' : 'border-gray-700/50'
-                  } overflow-hidden transition-all hover:scale-105`}
+                  className={`relative flex flex-col rounded-2xl bg-gray-900/60 backdrop-blur-xl border transition-all duration-300 hover:-translate-y-1 ${
+                    isPopular 
+                      ? 'border-emerald-500/60 shadow-2xl shadow-emerald-500/10 ring-1 ring-emerald-500/30' 
+                      : 'border-gray-800 shadow-xl'
+                  }`}
                 >
-                  {/* Popular Badge */}
+                  {/* Badge */}
                   {plan.discountLabel && (
-                    <div className="absolute top-0 right-0 bg-gradient-to-r from-purple-500 to-pink-600 text-white px-4 py-1 rounded-bl-lg text-sm font-bold">
+                    <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider shadow-md">
                       {plan.discountLabel}
                     </div>
                   )}
 
-                  <div className="p-8">
-                    {/* Icon */}
-                    <div
-                      className={`w-16 h-16 rounded-xl bg-gradient-to-r ${color} flex items-center justify-center mb-6`}
-                    >
-                      <Icon className="w-8 h-8 text-white" />
+                  <div className="p-8 flex-1 flex flex-col">
+                    <div className="flex items-center justify-between mb-6">
+                      <div className={`w-12 h-12 rounded-xl bg-gradient-to-tr ${gradient} flex items-center justify-center text-white shadow-lg`}>
+                        <Icon className="w-6 h-6" />
+                      </div>
+                      {plan.discountPercentage ? (
+                        <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                          {plan.discountPercentage}% OFF
+                        </span>
+                      ) : null}
                     </div>
 
-                    {/* Plan Name */}
-                    <h3 className="text-2xl font-bold text-white mb-2">{plan.name}</h3>
-                    
-                    {/* Credits */}
-                    <p className="text-gray-400 mb-6">{plan.credits} Message Credits</p>
+                    <h3 className="text-2xl font-bold text-white mb-1">{plan.name}</h3>
+                    <p className="text-sm text-gray-400 mb-6">
+                      {plan.credits.toLocaleString()} Message Credits
+                    </p>
 
-                    {/* Price */}
-                    <div className="mb-6">
-                      <span className="text-5xl font-bold text-white">₹{plan.price}</span>
-                      <span className="text-gray-400 ml-2">one-time</span>
-                      {plan.discountPercentage && plan.discountPercentage > 0 && (
-                        <div className="text-yellow-400 text-sm font-semibold mt-1">
-                          Save {plan.discountPercentage}%
-                        </div>
-                      )}
+                    <div className="mb-6 flex items-baseline gap-2">
+                      <span className="text-4xl md:text-5xl font-extrabold text-white tracking-tight">
+                        ₹{plan.price.toLocaleString()}
+                      </span>
+                      <span className="text-gray-400 text-sm font-medium">one-time</span>
                     </div>
 
-                    {/* Purchase Button */}
                     <button
                       onClick={() => handlePurchase(plan.id)}
-                      className={`w-full py-3 rounded-lg font-bold text-white bg-gradient-to-r ${color} hover:opacity-90 transition-all mb-6`}
+                      className={`w-full py-3 px-4 rounded-xl font-bold text-sm text-white transition-all shadow-lg mb-8 ${
+                        isPopular
+                          ? 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 shadow-emerald-500/20'
+                          : 'bg-gray-800 hover:bg-gray-700 border border-gray-700'
+                      }`}
                     >
-                      Get Started
+                      {user ? 'Recharge Credits' : 'Get Started'}
                     </button>
 
-                    {/* Features */}
-                    <ul className="space-y-3">
+                    <div className="space-y-3.5 pt-6 border-t border-gray-800/80 flex-1">
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">What's included</p>
                       {features.map((feature, idx) => (
-                        <li key={idx} className="flex items-start gap-3">
-                          <Check className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
-                          <span className="text-gray-300">{feature.trim()}</span>
-                        </li>
+                        <div key={idx} className="flex items-start gap-3">
+                          <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                          <span className="text-sm text-gray-300 leading-snug">{feature.trim()}</span>
+                        </div>
                       ))}
-                    </ul>
+                    </div>
                   </div>
                 </div>
               );
@@ -170,60 +211,56 @@ export default function PricingPage() {
         )}
 
         {/* FAQ Section */}
-        <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-700/50 p-8 mb-8">
-          <h2 className="text-3xl font-bold text-white mb-6">Frequently Asked Questions</h2>
-          
-          <div className="space-y-6">
+        <div className="rounded-2xl bg-gray-900/60 backdrop-blur-md border border-gray-800 p-8 md:p-10 mb-16">
+          <h2 className="text-2xl md:text-3xl font-bold text-white mb-8">Frequently Asked Questions</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div>
-              <h3 className="text-lg font-bold text-white mb-2">What are message credits?</h3>
-              <p className="text-gray-400">
-                Each WhatsApp message you send (text or file) costs 1 credit. Credits never expire and can be used anytime.
+              <h3 className="text-base font-semibold text-white mb-2">What is a message credit?</h3>
+              <p className="text-sm text-gray-400 leading-relaxed">
+                Each WhatsApp message you send (text or file attachment) deducts 1 credit. Credits stack and never expire.
               </p>
             </div>
-
             <div>
-              <h3 className="text-lg font-bold text-white mb-2">Can I upgrade or buy more credits?</h3>
-              <p className="text-gray-400">
-                Yes! You can purchase any plan multiple times. Credits stack and never expire.
+              <h3 className="text-base font-semibold text-white mb-2">Can I buy multiple plans?</h3>
+              <p className="text-sm text-gray-400 leading-relaxed">
+                Yes, you can purchase any credit pack as often as needed. All credits automatically accumulate in your account balance.
               </p>
             </div>
-
             <div>
-              <h3 className="text-lg font-bold text-white mb-2">What payment methods do you accept?</h3>
-              <p className="text-gray-400">
-                We accept all major credit/debit cards, UPI, and net banking through secure payment gateways.
+              <h3 className="text-base font-semibold text-white mb-2">Are incoming messages free?</h3>
+              <p className="text-sm text-gray-400 leading-relaxed">
+                Yes! Receiving incoming messages, Webhook deliveries, and reading chat logs are completely free of charge.
               </p>
             </div>
-
             <div>
-              <h3 className="text-lg font-bold text-white mb-2">Is there a refund policy?</h3>
-              <p className="text-gray-400">
-                Unused credits can be refunded within 7 days of purchase. Contact support for refund requests.
+              <h3 className="text-base font-semibold text-white mb-2">What payment methods are supported?</h3>
+              <p className="text-sm text-gray-400 leading-relaxed">
+                We accept UPI, Net Banking, Credit/Debit Cards, and Wallets through Razorpay and PhonePe.
               </p>
             </div>
           </div>
         </div>
 
-        {/* CTA Section */}
-        <div className="bg-gradient-to-r from-green-500/10 to-blue-500/10 border border-green-500/30 rounded-2xl p-8 text-center">
-          <h2 className="text-3xl font-bold text-white mb-4">
-            Need a Custom Plan?
+        {/* Custom CTA */}
+        <div className="rounded-2xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-cyan-500/10 border border-emerald-500/20 p-8 md:p-12 text-center">
+          <h2 className="text-2xl md:text-3xl font-extrabold text-white mb-3">
+            Looking for Custom Volume or Enterprise Setup?
           </h2>
-          <p className="text-gray-300 mb-6 max-w-2xl mx-auto">
-            Contact us for enterprise solutions, custom integrations, or bulk credit packages tailored to your needs.
+          <p className="text-gray-300 max-w-2xl mx-auto text-sm md:text-base mb-6">
+            We offer dedicated high-concurrency instances, bespoke webhooks, and volume pricing for teams sending 50,000+ messages/month.
           </p>
-          <div className="flex gap-4 justify-center">
+          <div className="flex flex-wrap items-center justify-center gap-4">
             <Link
               href="/dashboard"
-              className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-bold transition-colors"
+              className="px-6 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-sm transition shadow-lg shadow-emerald-500/20"
             >
-              Go to Dashboard
+              Go to Workspace
             </Link>
             <a
               href="mailto:hello@codefy.tech"
-              className="bg-gray-700 hover:bg-gray-600 text-white px-8 py-3 rounded-lg font-bold transition-colors"
+              className="px-6 py-3 rounded-xl bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white font-semibold text-sm transition"
             >
-              Contact Sales
+              Talk to Sales
             </a>
           </div>
         </div>

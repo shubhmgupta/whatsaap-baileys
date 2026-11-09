@@ -289,28 +289,17 @@ export default function InboxPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-      <header className="bg-gray-800/50 backdrop-blur-sm border-b border-gray-700/50 sticky top-0 z-10">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link
-                href="/dashboard/messages"
-                className="p-2 hover:bg-gray-700 rounded-lg transition"
-              >
-                <ArrowLeft className="w-6 h-6 text-white" />
-              </Link>
-              <h1 className="text-2xl font-bold text-white">Inbox</h1>
-            </div>
-            <div className="text-sm text-gray-400">
-              {user.email}
-            </div>
-          </div>
+    <div className="p-4 lg:p-6 max-w-7xl mx-auto space-y-4">
+      <div className="flex items-center justify-between pb-1">
+        <div>
+          <h1 className="text-2xl lg:text-3xl font-extrabold text-white tracking-tight">
+            Live Chat Inbox
+          </h1>
+          <p className="text-xs text-gray-400 mt-1">Real-time conversations with your WhatsApp contacts</p>
         </div>
-      </header>
+      </div>
 
-      <div className="container mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-180px)]">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-160px)]">
           {/* Contacts List */}
           <div className={`lg:col-span-1 bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700/50 flex flex-col overflow-hidden ${
             showChat ? 'hidden lg:flex' : 'flex'
@@ -346,8 +335,8 @@ export default function InboxPage() {
                     <button
                       key={contact.id}
                       onClick={() => setSelectedContact(contact)}
-                      className={`w-full p-4 text-left hover:bg-gray-700/30 transition ${
-                        selectedContact?.id === contact.id ? 'bg-gray-700/50' : ''
+                      className={`w-full p-4 text-left hover:bg-gray-700/30 transition border-b border-gray-750 ${
+                        selectedContact?.id === contact.id ? 'bg-emerald-500/10 border-l-4 border-emerald-500' : ''
                       }`}
                     >
                       <div className="flex items-center gap-3">
@@ -419,10 +408,10 @@ export default function InboxPage() {
                         className={`flex ${msg.isFromMe ? 'justify-end' : 'justify-start'}`}
                       >
                         <div
-                          className={`max-w-[70%] rounded-lg p-3 ${
+                          className={`max-w-[70%] rounded-2xl p-3.5 shadow-md ${
                             msg.isFromMe
-                              ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white'
-                              : 'bg-gray-700 text-white'
+                              ? 'bg-emerald-600 text-white rounded-tr-xs'
+                              : 'bg-gray-800 text-gray-100 border border-gray-700/70 rounded-tl-xs'
                           }`}
                         >
                           {msg.message && (
@@ -483,14 +472,14 @@ export default function InboxPage() {
                       type="text"
                       value={newMessage}
                       onChange={(e) => setNewMessage(e.target.value)}
-                      placeholder="Type your message..."
-                      className="flex-1 px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Type a WhatsApp message..."
+                      className="flex-1 px-4 py-3 bg-gray-700/80 border border-gray-600/80 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                       disabled={sendLoading}
                     />
                     <button
                       type="submit"
                       disabled={sendLoading || (!newMessage.trim() && !selectedFile)}
-                      className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      className="px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-xl font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-lg shadow-emerald-500/20"
                     >
                       {sendLoading ? (
                         <Loader2 className="w-5 h-5 animate-spin" />
@@ -513,6 +502,5 @@ export default function InboxPage() {
           </div>
         </div>
       </div>
-    </div>
-  );
+    );
 }

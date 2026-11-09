@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Mail, Lock, User, Phone, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Mail, Lock, User, Phone, AlertCircle, CheckCircle2, ArrowRight, Loader2, Sparkles } from 'lucide-react';
 
 export default function SignUp() {
   const appName = process.env.NEXT_PUBLIC_APP_NAME || 'Codefy';
@@ -64,8 +64,8 @@ export default function SignUp() {
       return;
     }
 
-    if (formData.password.length < 8) {
-      setError('Password must be at least 8 characters');
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters long');
       return;
     }
 
@@ -95,7 +95,11 @@ export default function SignUp() {
           confirmPassword: '',
         });
       } else {
-        setError(data.error || 'Sign up failed');
+        setError(data.error || 'Failed to create account');
+        if (data.error && data.error.includes('verify your email')) {
+          setShowResend(true);
+          setResendEmail(formData.email);
+        }
       }
     } catch (err) {
       setError('An error occurred. Please try again.');
@@ -105,40 +109,46 @@ export default function SignUp() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-900 to-gray-800 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950 flex items-center justify-center p-4 antialiased text-white py-12">
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <Link href="/" className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-green-400 to-blue-500">
-            {appName}
+          <Link href="/" className="inline-flex items-center gap-2 mb-3">
+            <span className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-cyan-500 flex items-center justify-center font-bold text-white shadow-lg shadow-emerald-500/20 text-lg">
+              W
+            </span>
+            <span className="text-2xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-cyan-400">
+              {appName}
+            </span>
           </Link>
-          <p className="text-gray-400 mt-2">Create your account</p>
+          <h2 className="text-xl font-bold text-white">Create an account</h2>
+          <p className="text-gray-400 text-sm mt-1">Get 10 free message credits immediately</p>
         </div>
 
         {/* Sign Up Form */}
-        <div className="bg-gray-800/50 backdrop-blur-sm p-8 rounded-2xl shadow-2xl border border-gray-700/50">
-          <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="bg-gray-900/70 backdrop-blur-xl p-8 rounded-2xl shadow-2xl border border-gray-800">
+          <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
-              <div className="bg-red-500/10 border border-red-500/50 text-red-500 p-3 rounded-lg flex items-center">
-                <AlertCircle className="w-5 h-5 mr-2 flex-shrink-0" />
-                <span className="text-sm">{error}</span>
+              <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-xl flex items-center gap-2 text-sm">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <span>{error}</span>
               </div>
             )}
 
             {success && (
-              <div className="bg-green-500/10 border border-green-500/50 text-green-500 p-3 rounded-lg flex items-center">
-                <CheckCircle2 className="w-5 h-5 mr-2 flex-shrink-0" />
-                <span className="text-sm">{success}</span>
+              <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-4 py-3 rounded-xl flex items-center gap-2 text-sm">
+                <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                <span>{success}</span>
               </div>
             )}
 
             <div>
-              <label htmlFor="fullname" className="block text-sm font-medium text-gray-300 mb-2">
+              <label htmlFor="fullname" className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
                 Full Name
               </label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <User className="w-5 h-5 text-gray-400" />
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-500">
+                  <User className="w-4 h-4" />
                 </div>
                 <input
                   id="fullname"
@@ -147,19 +157,19 @@ export default function SignUp() {
                   required
                   value={formData.fullname}
                   onChange={handleChange}
-                  className="w-full pl-10 p-3 bg-gray-700/50 border border-gray-600/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition text-white"
+                  className="w-full pl-10 pr-4 py-2.5 bg-gray-800/60 border border-gray-700/80 rounded-xl focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition text-sm text-white placeholder-gray-500"
                   placeholder="John Doe"
                 />
               </div>
             </div>
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
+              <label htmlFor="email" className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
                 Email Address
               </label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="w-5 h-5 text-gray-400" />
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-500">
+                  <Mail className="w-4 h-4" />
                 </div>
                 <input
                   id="email"
@@ -168,19 +178,19 @@ export default function SignUp() {
                   required
                   value={formData.email}
                   onChange={handleChange}
-                  className="w-full pl-10 p-3 bg-gray-700/50 border border-gray-600/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition text-white"
+                  className="w-full pl-10 pr-4 py-2.5 bg-gray-800/60 border border-gray-700/80 rounded-xl focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition text-sm text-white placeholder-gray-500"
                   placeholder="you@example.com"
                 />
               </div>
             </div>
 
             <div>
-              <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-300 mb-2">
-                Phone Number
+              <label htmlFor="phoneNumber" className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+                WhatsApp Phone Number
               </label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Phone className="w-5 h-5 text-gray-400" />
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-500">
+                  <Phone className="w-4 h-4" />
                 </div>
                 <input
                   id="phoneNumber"
@@ -189,114 +199,98 @@ export default function SignUp() {
                   required
                   value={formData.phoneNumber}
                   onChange={handleChange}
-                  className="w-full pl-10 p-3 bg-gray-700/50 border border-gray-600/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition text-white"
-                  placeholder="1234567890"
+                  className="w-full pl-10 pr-4 py-2.5 bg-gray-800/60 border border-gray-700/80 rounded-xl focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition text-sm text-white placeholder-gray-500"
+                  placeholder="+919876543210"
                 />
               </div>
             </div>
 
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
-                Password
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="w-5 h-5 text-gray-400" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="password" className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+                  Password
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-500">
+                    <Lock className="w-4 h-4" />
+                  </div>
+                  <input
+                    id="password"
+                    name="password"
+                    type="password"
+                    required
+                    value={formData.password}
+                    onChange={handleChange}
+                    className="w-full pl-10 pr-3 py-2.5 bg-gray-800/60 border border-gray-700/80 rounded-xl focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition text-sm text-white placeholder-gray-500"
+                    placeholder="••••••••"
+                  />
                 </div>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  required
-                  value={formData.password}
-                  onChange={handleChange}
-                  className="w-full pl-10 p-3 bg-gray-700/50 border border-gray-600/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition text-white"
-                  placeholder="••••••••"
-                />
               </div>
-            </div>
 
-            <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-300 mb-2">
-                Confirm Password
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="w-5 h-5 text-gray-400" />
+              <div>
+                <label htmlFor="confirmPassword" className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+                  Confirm Password
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-500">
+                    <Lock className="w-4 h-4" />
+                  </div>
+                  <input
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    type="password"
+                    required
+                    value={formData.confirmPassword}
+                    onChange={handleChange}
+                    className="w-full pl-10 pr-3 py-2.5 bg-gray-800/60 border border-gray-700/80 rounded-xl focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition text-sm text-white placeholder-gray-500"
+                    placeholder="••••••••"
+                  />
                 </div>
-                <input
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  type="password"
-                  required
-                  value={formData.confirmPassword}
-                  onChange={handleChange}
-                  className="w-full pl-10 p-3 bg-gray-700/50 border border-gray-600/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition text-white"
-                  placeholder="••••••••"
-                />
               </div>
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-gradient-to-r from-green-500 to-blue-600 hover:from-green-600 hover:to-blue-700 text-white font-bold py-3 px-4 rounded-lg transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full mt-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-semibold py-3 px-4 rounded-xl transition shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
             >
-              {loading ? 'Creating Account...' : 'Create Account'}
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Creating Account...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4" />
+                  <span>Create Account</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
             </button>
           </form>
 
-          <div className="mt-6 text-center space-y-3">
-            <p className="text-gray-400">
-              Already have an account?{' '}
-              <Link href="/signin" className="text-green-400 hover:text-green-300 transition font-semibold">
-                Sign in
-              </Link>
-            </p>
-            <div className="pt-3 border-t border-gray-700/50">
+          {showResend && (
+            <div className="mt-4 pt-4 border-t border-gray-800 text-center">
+              <p className="text-xs text-gray-400 mb-2">Didn't receive verification email?</p>
               <button
-                type="button"
-                onClick={() => setShowResend(!showResend)}
-                className="text-gray-400 hover:text-green-400 transition text-sm"
+                onClick={handleResendVerification}
+                disabled={loading}
+                className="text-xs text-emerald-400 hover:text-emerald-300 font-semibold"
               >
-                {showResend ? 'Hide resend verification' : "Didn't receive verification email?"}
+                Resend Verification Email
               </button>
             </div>
-          </div>
-
-          {showResend && (
-            <div className="mt-4 p-4 bg-gray-700/30 rounded-lg border border-gray-600/50">
-              <p className="text-sm text-gray-400 mb-3">Enter your email to resend verification link:</p>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Mail className="w-5 h-5 text-gray-400" />
-                  </div>
-                  <input
-                    type="email"
-                    value={resendEmail}
-                    onChange={(e) => setResendEmail(e.target.value)}
-                    className="w-full pl-10 p-2 bg-gray-700/50 border border-gray-600/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition text-white text-sm"
-                    placeholder="your@email.com"
-                  />
-                </div>
-                <button
-                  onClick={handleResendVerification}
-                  disabled={loading}
-                  className="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed text-sm whitespace-nowrap"
-                >
-                  {loading ? 'Sending...' : 'Resend'}
-                </button>
-              </div>
-            </div>
           )}
-        </div>
 
-        <p className="text-center text-gray-500 text-sm mt-8">
-          By signing up, you agree to our{' '}
-          <a href="#" className="text-gray-400 hover:text-white transition">Terms</a> and{' '}
-          <a href="#" className="text-gray-400 hover:text-white transition">Privacy Policy</a>
-        </p>
+          <div className="mt-6 pt-5 border-t border-gray-800 text-center">
+            <p className="text-sm text-gray-400">
+              Already have an account?{' '}
+              <Link href="/signin" className="text-emerald-400 hover:text-emerald-300 transition font-semibold">
+                Sign In
+              </Link>
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );

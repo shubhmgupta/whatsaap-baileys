@@ -538,28 +538,19 @@ export default function Dashboard() {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-900 to-gray-800">
-      {/* Header */}
-      <header className="bg-gray-800/50 backdrop-blur-sm border-b border-gray-700/50">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <Link href="/" className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-green-400 to-blue-500">
-            {appName}
-          </Link>
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <p className="text-white font-semibold">{user?.fullname || 'User'}</p>
-              <p className="text-sm text-gray-400">Credits: {user?.credits || 0}</p>
-            </div>
-            <button onClick={handleLogout} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition flex items-center gap-2">
-              <LogOut className="w-4 h-4" />
-              Logout
-            </button>
-          </div>
+    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
+        <div>
+          <h1 className="text-2xl lg:text-3xl font-extrabold text-white tracking-tight">
+            WhatsApp Messenger & QR Pairing
+          </h1>
+          <p className="text-sm text-gray-400 mt-1">
+            Connect your device via QR and broadcast individual or multi-contact messages
+          </p>
         </div>
-      </header>
+      </div>
 
-      <div className="container mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* WhatsApp Connection */}
           <div className="lg:col-span-1">
             <div className="bg-gray-800/50 backdrop-blur-sm p-6 rounded-xl border border-gray-700/50">
@@ -845,10 +836,9 @@ export default function Dashboard() {
             )}
           </div>
         </div>
-      </div>
 
-      {/* Contact Picker Modal */}
-      {isContactPickerOpen && (
+        {/* Contact Picker Modal */}
+        {isContactPickerOpen && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <div className="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-md max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-gray-700">
