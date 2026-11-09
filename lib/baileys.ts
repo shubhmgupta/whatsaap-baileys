@@ -746,11 +746,21 @@ async function createBaileysSession(userId: string) {
               continue;
             }
 
+            // Parse message timestamp accurately from WhatsApp epoch
+            const msgTime = message.messageTimestamp
+              ? new Date(
+                  (typeof message.messageTimestamp === "string"
+                    ? parseInt(message.messageTimestamp)
+                    : Number(message.messageTimestamp)) * 1000
+                )
+              : new Date();
+
             console.log("\n" + "=".repeat(80));
             console.log("📨 INCOMING MESSAGE RECEIVED");
             console.log("=".repeat(80));
             console.log("👤 From:", senderNumber);
             console.log("📱 Push Name:", message.pushName);
+            console.log("⏰ WhatsApp Time:", msgTime.toISOString());
             console.log("=".repeat(80) + "\n");
 
             const messageText =
@@ -858,14 +868,14 @@ async function createBaileysSession(userId: string) {
                   userId: parseInt(userId),
                   phoneNumber: senderNumber,
                   name: contactName,
-                  lastMessageAt: new Date(),
+                  lastMessageAt: msgTime,
                 })
                 .$returningId();
               contact = await db.query.contacts.findFirst({
                 where: eq(contacts.id, result.id),
               });
             } else {
-              const updateData: any = { lastMessageAt: new Date() };
+              const updateData: any = { lastMessageAt: msgTime };
               if (
                 contactName &&
                 contactName !== senderNumber &&
@@ -902,7 +912,7 @@ async function createBaileysSession(userId: string) {
               mediaType,
               mediaUrl,
               isFromMe: false,
-              timestamp: new Date(),
+              timestamp: msgTime,
             };
 
             const [savedResult] = await db

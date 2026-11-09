@@ -193,6 +193,7 @@ export async function POST(request: Request) {
       mediaUrl: outgoingMediaUrl,
       mediaType: file?.type || null,
       isFromMe: true,
+      timestamp: new Date(),
     });
 
     await Promise.all([userUpdatePromise, messageLogPromise, chatMessagePromise]);

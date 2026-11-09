@@ -41,6 +41,22 @@ interface Message {
   mediaUrl: string | null;
 }
 
+function formatChatDate(dateString?: string | Date | null): string {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return '';
+  const now = new Date();
+  if (date.toDateString() === now.toDateString()) {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) {
+    return 'Yesterday';
+  }
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
 export default function InboxPage() {
   const [user, setUser] = useState<any>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -404,7 +420,7 @@ export default function InboxPage() {
                       {contact.lastMessageAt && (
                         <p className="text-[10px] text-slate-500 mt-1 flex items-center gap-1 font-mono">
                           <Clock className="w-3 h-3" />
-                          <span>{new Date(contact.lastMessageAt).toLocaleDateString()}</span>
+                          <span>{formatChatDate(contact.lastMessageAt)}</span>
                         </p>
                       )}
                     </div>
