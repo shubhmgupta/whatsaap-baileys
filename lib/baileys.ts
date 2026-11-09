@@ -52,14 +52,17 @@ export async function uploadBufferToCloudinary(
   const dataUri = `data:${mediaType};base64,${buffer.toString("base64")}`;
 
   try {
+    const rawName = path.parse(fileName || 'file').name;
+    const safePublicId = `${Date.now()}_${rawName.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 60)}`;
+
     const uploadRes = await cloudinary.uploader.upload(dataUri, {
       folder: process.env.CLOUDINARY_FOLDER || "whatsapp-automation",
-      public_id: path.parse(fileName).name,
+      public_id: safePublicId,
       resource_type: "auto",
     });
 
     // Log full response for debugging (secure_url typically present)
-    console.log("   🔁 Cloudinary upload response:", uploadRes);
+    console.log("   🔁 Cloudinary upload response:", uploadRes?.secure_url);
 
     return uploadRes?.secure_url ?? null;
   } catch (err) {

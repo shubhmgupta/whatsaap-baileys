@@ -4,9 +4,6 @@ import { getUserFromToken, ensureWhatsAppSession } from '@/lib/api-auth';
 import { db } from '@/lib/db';
 import { messages, users, contacts, chatMessages } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { writeFile, unlink } from 'fs/promises';
-import { join } from 'path';
-import { readFileSync } from 'fs';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -22,10 +19,10 @@ export async function POST(request: Request) {
   try {
     // Get API token from Authorization header
     const token = request.headers.get('Authorization')?.split(' ')[1];
-    
+
     if (!token) {
-      return NextResponse.json({ 
-        error: 'Authorization token required. Format: Bearer YOUR_API_TOKEN' 
+      return NextResponse.json({
+        error: 'Authorization token required. Format: Bearer YOUR_API_TOKEN'
       }, { status: 401, headers: corsHeaders });
     }
 
@@ -33,15 +30,15 @@ export async function POST(request: Request) {
     const user = await getUserFromToken(token);
 
     if (!user) {
-      return NextResponse.json({ 
-        error: 'Invalid API token' 
+      return NextResponse.json({
+        error: 'Invalid API token'
       }, { status: 401, headers: corsHeaders });
     }
 
     // Check credits
     if (user.credits === null || user.credits <= 0) {
-      return NextResponse.json({ 
-        error: 'Insufficient credits' 
+      return NextResponse.json({
+        error: 'Insufficient credits'
       }, { status: 402, headers: corsHeaders });
     }
 
@@ -64,15 +61,15 @@ export async function POST(request: Request) {
     }
 
     if (!phoneNumber) {
-      return NextResponse.json({ 
-        error: 'Phone number is required' 
+      return NextResponse.json({
+        error: 'Phone number is required'
       }, { status: 400, headers: corsHeaders });
     }
 
     // At least one of message or file must be provided
     if (!message && !file) {
-      return NextResponse.json({ 
-        error: 'Either message text or file is required' 
+      return NextResponse.json({
+        error: 'Either message text or file is required'
       }, { status: 400, headers: corsHeaders });
     }
 
@@ -80,29 +77,29 @@ export async function POST(request: Request) {
 
     // Ensure WhatsApp session is connected (auto-restore if needed)
     const sessionCheck = await ensureWhatsAppSession(userId);
-    
+
     if (sessionCheck.status === 'restoring') {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: sessionCheck.message || 'WhatsApp session is being restored',
         status: 'restoring',
         message: 'Please retry in a few seconds'
       }, { status: 503, headers: corsHeaders });
     }
-    
+
     if (sessionCheck.status === 'needs_qr') {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: sessionCheck.message || 'WhatsApp not connected',
         status: 'needs_qr',
         message: 'Please generate QR code at /api/v1/auth/qr first'
       }, { status: 400, headers: corsHeaders });
     }
-    
+
     const session = sessionCheck.session;
-    
+
     if (!session || !session.sock?.user) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'WhatsApp session error. Please reconnect.',
-        needsQR: true 
+        needsQR: true
       }, { status: 400, headers: corsHeaders });
     }
 
@@ -110,73 +107,62 @@ export async function POST(request: Request) {
     const [result] = await session.sock.onWhatsApp(phoneNumber);
 
     if (!result?.exists) {
-      return NextResponse.json({ 
-        error: 'Recipient is not on WhatsApp' 
+      return NextResponse.json({
+        error: 'Recipient is not on WhatsApp'
       }, { status: 400, headers: corsHeaders });
     }
+
+    let outgoingMediaUrl: string | null = null;
 
     // Handle three combinations: text only, file only, text + file
     if (file) {
       // File provided (with or without text)
       const bytes = await file.arrayBuffer();
       const buffer = Buffer.from(bytes);
-      const tempPath = join(process.cwd(), 'temp', file.name);
-      
-      // Save file temporarily
-      await writeFile(tempPath, buffer);
+      const mimeType = file.type || 'application/octet-stream';
+      const fileName = file.name || 'document';
 
+      // Try uploading to Cloudinary first so we can save the full URL in DB
       try {
-        const fileBuffer = readFileSync(tempPath);
-        const mimeType = file.type;
+        outgoingMediaUrl = await uploadBufferToCloudinary(buffer, mimeType, fileName);
+        console.log('   🔗 Outgoing file uploaded to Cloudinary:', outgoingMediaUrl);
+      } catch (err) {
+        console.warn('   ⚠️ Failed to upload outgoing file to Cloudinary (delivering directly via WhatsApp):', err);
+        outgoingMediaUrl = null;
+      }
 
-        // Try uploading to Cloudinary first so we can save the full URL in DB
-        let outgoingMediaUrl: string | null = null;
-        try {
-          outgoingMediaUrl = await uploadBufferToCloudinary(fileBuffer, mimeType, file.name);
-          console.log('   🔗 Outgoing file uploaded to Cloudinary:', outgoingMediaUrl);
-        } catch (err) {
-          console.error('   ⚠️ Failed to upload outgoing file to Cloudinary:', err);
-          outgoingMediaUrl = null;
+      if (mimeType.startsWith('image/')) {
+        // Image with optional caption (text)
+        await session.sock.sendMessage(result.jid, {
+          image: buffer,
+          caption: message || undefined,
+          mimetype: mimeType,
+        });
+      } else if (mimeType.startsWith('video/')) {
+        // Video with optional caption (text)
+        await session.sock.sendMessage(result.jid, {
+          video: buffer,
+          caption: message || undefined,
+          mimetype: mimeType,
+        });
+      } else if (mimeType.startsWith('audio/')) {
+        // Audio (no caption support in WhatsApp)
+        await session.sock.sendMessage(result.jid, {
+          audio: buffer,
+          mimetype: mimeType,
+        });
+        // If text provided, send it as separate message
+        if (message) {
+          await session.sock.sendMessage(result.jid, { text: message });
         }
-
-        if (mimeType.startsWith('image/')) {
-          // Image with optional caption (text)
-          await session.sock.sendMessage(result.jid, {
-            image: fileBuffer,
-            caption: message || undefined, // Caption is optional
-          });
-        } else if (mimeType.startsWith('video/')) {
-          // Video with optional caption (text)
-          await session.sock.sendMessage(result.jid, {
-            video: fileBuffer,
-            caption: message || undefined,
-          });
-        } else if (mimeType.startsWith('audio/')) {
-          // Audio (no caption support in WhatsApp)
-          await session.sock.sendMessage(result.jid, {
-            audio: fileBuffer,
-            mimetype: mimeType,
-          });
-          // If text provided, send it as separate message
-          if (message) {
-            await session.sock.sendMessage(result.jid, { text: message });
-          }
-        } else {
-          // Document with optional caption (text)
-          await session.sock.sendMessage(result.jid, {
-            document: fileBuffer,
-            mimetype: mimeType,
-            fileName: file.name,
-            caption: message || undefined,
-          });
-        }
-
-        // Attach outgoingMediaUrl to file variable so we can save it below
-        // (we cannot mutate the File object directly in TypeScript runtime, so store separately)
-        (file as any)._uploadedUrl = outgoingMediaUrl;
-      } finally {
-        // Clean up temp file
-        await unlink(tempPath).catch(() => {});
+      } else {
+        // Document with optional caption (text)
+        await session.sock.sendMessage(result.jid, {
+          document: buffer,
+          mimetype: mimeType,
+          fileName: fileName,
+          caption: message || undefined,
+        });
       }
     } else if (message) {
       // Text only (no file)
@@ -185,11 +171,11 @@ export async function POST(request: Request) {
 
     // Deduct credit
     await db.update(users).set({ credits: user.credits - 1 }).where(eq(users.id, userId));
-    
+
     // Save message
-    await db.insert(messages).values({ 
-      userId, 
-      message: message || `Sent file: ${file?.name}` 
+    await db.insert(messages).values({
+      userId,
+      message: message || `Sent file: ${file?.name}`
     });
 
     // Save or update contact
@@ -221,7 +207,6 @@ export async function POST(request: Request) {
     }
 
     // Save chat message
-    const outgoingMediaUrl = (file as any)?._uploadedUrl ?? null;
     await db.insert(chatMessages).values({
       userId,
       contactId: contact.id,
@@ -232,16 +217,16 @@ export async function POST(request: Request) {
       isFromMe: true,
     });
 
-    return NextResponse.json({ 
-      message: 'Message sent successfully', 
+    return NextResponse.json({
+      message: 'Message sent successfully',
       contactId: contact.id,
       remainingCredits: user.credits - 1
     }, { headers: corsHeaders });
 
   } catch (error) {
     console.error('Send message error:', error);
-    return NextResponse.json({ 
-      error: 'Failed to send message. Please try again.' 
+    return NextResponse.json({
+      error: 'Failed to send message. Please try again.'
     }, { status: 500, headers: corsHeaders });
   }
 }

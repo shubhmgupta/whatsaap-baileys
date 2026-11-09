@@ -3,15 +3,11 @@ import { getSession, uploadBufferToCloudinary } from '@/lib/baileys';
 import { db } from '@/lib/db';
 import { messages, users, apiTokens, contacts, chatMessages } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { writeFile, unlink } from 'fs/promises';
-import { join } from 'path';
-import { readFileSync } from 'fs';
-import { mkdir } from 'fs/promises';
 
 async function getUserByToken(token: string) {
-    if (!token) return null;
-    const tokenRecord = await db.query.apiTokens.findFirst({ where: eq(apiTokens.token, token), with: { user: true } });
-    return tokenRecord?.user || null;
+  if (!token) return null;
+  const tokenRecord = await db.query.apiTokens.findFirst({ where: eq(apiTokens.token, token), with: { user: true } });
+  return tokenRecord?.user || null;
 }
 
 export async function POST(request: Request) {
@@ -61,14 +57,14 @@ export async function POST(request: Request) {
 
     // First check if session exists in memory
     let session = await getSession(user.id.toString(), false);
-    
+
     // If not connected, try to restore from database and reconnect
     if (!session || !session.connected || !session.sock?.user) {
       console.log(`📡 Attempting to restore session for user ${user.id} before sending message...`);
-      
+
       // Try to restore and connect (waitForQR=false means no QR generation, just restore)
       session = await getSession(user.id.toString(), true);
-      
+
       // Wait up to 15 seconds for connection to establish
       if (session && !session.connected) {
         await new Promise((resolve) => {
@@ -76,7 +72,7 @@ export async function POST(request: Request) {
           const checkInterval = setInterval(() => {
             const currentSession = session;
             attempts++;
-            
+
             if (currentSession?.connected && currentSession?.sock?.user) {
               clearInterval(checkInterval);
               resolve(true);
@@ -86,17 +82,17 @@ export async function POST(request: Request) {
             }
           }, 500);
         });
-        
+
         // Refresh session after waiting
         session = await getSession(user.id.toString(), false);
       }
     }
-    
+
     // Final check - if still not connected, return error
     if (!session || !session.connected || !session.sock?.user) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'WhatsApp not connected. Unable to restore session. Please connect via dashboard.',
-        needsQR: true 
+        needsQR: true
       }, { status: 400 });
     }
 
@@ -107,57 +103,51 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Recipient is not on WhatsApp' }, { status: 400 });
     }
 
+    let outgoingMediaUrl: string | null = null;
+
     // Send message with or without file
     if (file) {
       const bytes = await file.arrayBuffer();
       const buffer = Buffer.from(bytes);
-      const tempPath = join(process.cwd(), 'temp', file.name);
-      
-      // Save file temporarily
-      await writeFile(tempPath, buffer);
+      const mimeType = file.type || 'application/octet-stream';
+      const fileName = file.name || 'document';
 
+      // Upload outgoing file to Cloudinary to get a public URL for chat history
       try {
-        const fileBuffer = readFileSync(tempPath);
-        const mimeType = file.type;
+        outgoingMediaUrl = await uploadBufferToCloudinary(buffer, mimeType, fileName);
+        console.log('   🔗 Outgoing file uploaded to Cloudinary:', outgoingMediaUrl);
+      } catch (err) {
+        console.warn('   ⚠️ Failed to upload outgoing file to Cloudinary (delivering directly via WhatsApp):', err);
+        outgoingMediaUrl = null;
+      }
 
-        // Upload outgoing file to Cloudinary to get a public URL
-        let outgoingMediaUrl: string | null = null;
-        try {
-          outgoingMediaUrl = await uploadBufferToCloudinary(fileBuffer, mimeType, file.name);
-          console.log('   🔗 Outgoing file uploaded to Cloudinary:', outgoingMediaUrl);
-        } catch (err) {
-          console.error('   ⚠️ Failed to upload outgoing file to Cloudinary:', err);
-          outgoingMediaUrl = null;
+      if (mimeType.startsWith('image/')) {
+        await session.sock.sendMessage(result.jid, {
+          image: buffer,
+          caption: message || undefined,
+          mimetype: mimeType,
+        });
+      } else if (mimeType.startsWith('video/')) {
+        await session.sock.sendMessage(result.jid, {
+          video: buffer,
+          caption: message || undefined,
+          mimetype: mimeType,
+        });
+      } else if (mimeType.startsWith('audio/')) {
+        await session.sock.sendMessage(result.jid, {
+          audio: buffer,
+          mimetype: mimeType,
+        });
+        if (message) {
+          await session.sock.sendMessage(result.jid, { text: message });
         }
-
-        if (mimeType.startsWith('image/')) {
-          await session.sock.sendMessage(result.jid, {
-            image: fileBuffer,
-            caption: message || undefined,
-          });
-        } else if (mimeType.startsWith('video/')) {
-          await session.sock.sendMessage(result.jid, {
-            video: fileBuffer,
-            caption: message || undefined,
-          });
-        } else if (mimeType.startsWith('audio/')) {
-          await session.sock.sendMessage(result.jid, {
-            audio: fileBuffer,
-            mimetype: mimeType,
-          });
-        } else {
-          await session.sock.sendMessage(result.jid, {
-            document: fileBuffer,
-            mimetype: mimeType,
-            fileName: file.name,
-            caption: message || undefined,
-          });
-        }
-
-        (file as any)._uploadedUrl = outgoingMediaUrl;
-      } finally {
-        // Clean up temp file
-        await unlink(tempPath).catch(() => {});
+      } else {
+        await session.sock.sendMessage(result.jid, {
+          document: buffer,
+          mimetype: mimeType,
+          fileName: fileName,
+          caption: message || undefined,
+        });
       }
     } else {
       // Send text only
@@ -165,9 +155,9 @@ export async function POST(request: Request) {
     }
 
     await db.update(users).set({ credits: user.credits - 1 }).where(eq(users.id, user.id));
-    await db.insert(messages).values({ 
-      userId: user.id, 
-      message: message || `Sent file: ${file?.name}` 
+    await db.insert(messages).values({
+      userId: user.id,
+      message: message || `Sent file: ${file?.name}`
     });
 
     // Save or update contact
@@ -199,7 +189,6 @@ export async function POST(request: Request) {
     }
 
     // Save chat message
-    const outgoingMediaUrl = (file as any)?._uploadedUrl ?? null;
     await db.insert(chatMessages).values({
       userId: user.id,
       contactId: contact.id,
