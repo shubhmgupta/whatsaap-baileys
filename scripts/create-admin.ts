@@ -6,9 +6,16 @@ import { eq } from 'drizzle-orm';
 
 async function createAdmin() {
   try {
-    const email = 'shubhamguptacoder@gmail.com';
-    const password = '@Shubham123';
-    const fullname = 'Shubham Gupta';
+    const email = process.env.ADMIN_EMAIL || process.argv[2];
+    const password = process.env.ADMIN_PASSWORD || process.argv[3];
+    const fullname = process.env.ADMIN_NAME || process.argv[4] || 'Admin User';
+
+    if (!email || !password) {
+      console.error('❌ Error: Admin email and password are required.');
+      console.error('Usage: npx tsx scripts/create-admin.ts <email> <password> [fullname]');
+      console.error('Or set ADMIN_EMAIL, ADMIN_PASSWORD, and ADMIN_NAME environment variables.');
+      process.exit(1);
+    }
 
     // Check if admin already exists
     const existingUser = await db
@@ -40,7 +47,6 @@ async function createAdmin() {
 
     console.log('✅ Admin user created successfully!');
     console.log('📧 Email:', email);
-    console.log('🔑 Password: @Shubham123');
     console.log('👤 ID:', admin.id);
     console.log('💳 Credits:', admin.credits);
     console.log('✓ Email verified');
