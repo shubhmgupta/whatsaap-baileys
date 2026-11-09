@@ -767,243 +767,223 @@ async function createBaileysSession(userId: string) {
       }
     });
 
-    // Listen for incoming messages (ALL messages, both sent and received)
+    // Helper to process a single message (ONLY for saved contacts in database)
+    const processMessageForSavedContact = async (message: any) => {
+      try {
+        const jid = message?.key?.remoteJid || "";
+
+        // STRICT FILTER: Skip status broadcasts, groups, broadcast lists, and newsletters
+        if (
+          !jid ||
+          jid === "status@broadcast" ||
+          jid.endsWith("@g.us") ||
+          jid.endsWith("@broadcast") ||
+          jid.endsWith("@newsletter")
+        ) {
+          return;
+        }
+
+        // Must be an individual chat (@s.whatsapp.net, @c.us, or @lid)
+        if (!jid.endsWith("@s.whatsapp.net") && !jid.endsWith("@c.us") && !jid.endsWith("@lid")) {
+          return;
+        }
+
+        // Resolve phone number from direct JID, participantPn, or LID device registration mapping
+        const partnerNumber = await resolvePhoneNumber(
+          userId,
+          jid,
+          (message.key as any)?.participantPn,
+          message.key.participant || undefined
+        );
+
+        if (!partnerNumber || partnerNumber.length < 5) {
+          return;
+        }
+
+        const last10 = partnerNumber.length >= 10 ? partnerNumber.slice(-10) : partnerNumber;
+        const cleanPartner = partnerNumber.replace(/[^0-9]/g, '');
+
+        // STRICT CHECK: ONLY proceed if this number is an ALREADY SAVED contact in the database for this user
+        const contact = await db.query.contacts.findFirst({
+          where: and(
+            eq(contacts.userId, parseInt(userId)),
+            or(
+              eq(contacts.phoneNumber, partnerNumber),
+              eq(contacts.phoneNumber, cleanPartner),
+              sql`${contacts.phoneNumber} LIKE ${'%' + last10}`
+            )
+          ),
+        });
+
+        if (!contact) {
+          // Unsaved number: DO NOT auto-create contact, DO NOT fetch or save messages
+          return;
+        }
+
+        const rawMsg = extractActualMessage(message.message);
+        if (!rawMsg) return;
+
+        // Skip protocol/reaction messages (e.g. reactions, deletes, ephemeral settings)
+        if (rawMsg.protocolMessage || rawMsg.reactionMessage) {
+          return;
+        }
+
+        // Parse message timestamp accurately from WhatsApp epoch
+        const msgTime = message.messageTimestamp
+          ? new Date(
+              (typeof message.messageTimestamp === "string"
+                ? parseInt(message.messageTimestamp)
+                : Number(message.messageTimestamp)) * 1000
+            )
+          : new Date();
+
+        const isFromMe = Boolean(message.key.fromMe);
+
+        // Deduplication check: do not insert duplicate message for the same contact & timestamp
+        const existingMsg = await db.query.chatMessages.findFirst({
+          where: and(
+            eq(chatMessages.userId, parseInt(userId)),
+            eq(chatMessages.contactId, contact.id),
+            eq(chatMessages.timestamp, msgTime),
+            eq(chatMessages.isFromMe, isFromMe)
+          ),
+        });
+
+        if (existingMsg) {
+          return;
+        }
+
+        const messageText =
+          rawMsg.conversation ||
+          rawMsg.extendedTextMessage?.text ||
+          rawMsg.imageMessage?.caption ||
+          rawMsg.videoMessage?.caption ||
+          rawMsg.documentMessage?.caption ||
+          "";
+
+        // Determine media type and upload to Cloudinary if media exists
+        let mediaType: string | null = null;
+        let mediaUrl: string | null = null;
+
+        if (rawMsg.imageMessage) {
+          const mime = rawMsg.imageMessage.mimetype || "image/jpeg";
+          mediaType = mime;
+          try {
+            const stream = await downloadContentFromMessage(rawMsg.imageMessage, "image");
+            const chunks: Buffer[] = [];
+            for await (const chunk of stream) chunks.push(chunk);
+            const buffer = Buffer.concat(chunks);
+            if (buffer.length > 0 && process.env.CLOUDINARY_API_KEY) {
+              const ext = mime.split("/")[1] || "jpg";
+              const fileName = `img_${Date.now()}.${ext}`;
+              mediaUrl = await uploadBufferToCloudinary(buffer, mime, fileName);
+            }
+          } catch (err) {
+            console.error("Error downloading/uploading image:", err);
+          }
+        } else if (rawMsg.videoMessage) {
+          const mime = rawMsg.videoMessage.mimetype || "video/mp4";
+          mediaType = mime;
+          try {
+            const stream = await downloadContentFromMessage(rawMsg.videoMessage, "video");
+            const chunks: Buffer[] = [];
+            for await (const chunk of stream) chunks.push(chunk);
+            const buffer = Buffer.concat(chunks);
+            if (buffer.length > 0 && process.env.CLOUDINARY_API_KEY) {
+              const ext = mime.split("/")[1] || "mp4";
+              const fileName = `vid_${Date.now()}.${ext}`;
+              mediaUrl = await uploadBufferToCloudinary(buffer, mime, fileName);
+            }
+          } catch (err) {
+            console.error("Error downloading/uploading video:", err);
+          }
+        } else if (rawMsg.audioMessage) {
+          const mime = rawMsg.audioMessage.mimetype || "audio/ogg";
+          mediaType = mime;
+          try {
+            const stream = await downloadContentFromMessage(rawMsg.audioMessage, "audio");
+            const chunks: Buffer[] = [];
+            for await (const chunk of stream) chunks.push(chunk);
+            const buffer = Buffer.concat(chunks);
+            if (buffer.length > 0 && process.env.CLOUDINARY_API_KEY) {
+              const ext = mime.split("/")[1] || "ogg";
+              const fileName = `aud_${Date.now()}.${ext}`;
+              mediaUrl = await uploadBufferToCloudinary(buffer, mime, fileName);
+            }
+          } catch (err) {
+            console.error("Error downloading/uploading audio:", err);
+          }
+        } else if (rawMsg.documentMessage) {
+          const mime = rawMsg.documentMessage.mimetype || "application/octet-stream";
+          mediaType = mime;
+          try {
+            const stream = await downloadContentFromMessage(rawMsg.documentMessage, "document");
+            const chunks: Buffer[] = [];
+            for await (const chunk of stream) chunks.push(chunk);
+            const buffer = Buffer.concat(chunks);
+            if (buffer.length > 0 && process.env.CLOUDINARY_API_KEY) {
+              const fileName = rawMsg.documentMessage.fileName || `doc_${Date.now()}`;
+              mediaUrl = await uploadBufferToCloudinary(buffer, mime, fileName);
+            }
+          } catch (err) {
+            console.error("Error downloading/uploading document:", err);
+          }
+        }
+
+        const finalMessage =
+          messageText ||
+          rawMsg.imageMessage?.caption ||
+          rawMsg.videoMessage?.caption ||
+          rawMsg.documentMessage?.caption ||
+          null;
+
+        // Save message for the saved contact
+        const messageData = {
+          userId: parseInt(userId),
+          contactId: contact.id,
+          phoneNumber: contact.phoneNumber || partnerNumber,
+          message: finalMessage,
+          mediaType,
+          mediaUrl,
+          isFromMe,
+          timestamp: msgTime,
+        };
+
+        const [savedResult] = await db
+          .insert(chatMessages)
+          .values(messageData)
+          .$returningId();
+
+        // Update lastMessageAt on the saved contact
+        await db
+          .update(contacts)
+          .set({ lastMessageAt: msgTime })
+          .where(eq(contacts.id, contact.id));
+
+        console.log(`✅ Saved ${isFromMe ? 'outgoing' : 'incoming'} message (ID: ${savedResult.id}) for SAVED contact: ${contact.name || contact.phoneNumber}`);
+      } catch (err) {
+        console.error("Error processing message for saved contact:", err);
+      }
+    };
+
+    // Listen for incoming and outgoing real-time messages
     sock.ev.on("messages.upsert", async (m) => {
       for (const message of m.messages) {
-        try {
-          const jid = message.key.remoteJid || "";
+        await processMessageForSavedContact(message);
+      }
+    });
 
-          // STRICT FILTER: Skip status broadcasts, groups, broadcast lists, and newsletters
-          if (
-            !jid ||
-            jid === "status@broadcast" ||
-            jid.endsWith("@g.us") ||
-            jid.endsWith("@broadcast") ||
-            jid.endsWith("@newsletter")
-          ) {
-            continue;
+    // Listen for history sync messages (only saves messages for saved contacts)
+    sock.ev.on("messaging-history.set", async (history: any) => {
+      try {
+        if (history?.messages && Array.isArray(history.messages)) {
+          console.log(`📜 Processing ${history.messages.length} historical messages (SAVED CONTACTS ONLY)...`);
+          for (const message of history.messages) {
+            await processMessageForSavedContact(message);
           }
-
-          // Must be an individual chat (@s.whatsapp.net, @c.us, or @lid)
-          if (!jid.endsWith("@s.whatsapp.net") && !jid.endsWith("@c.us") && !jid.endsWith("@lid")) {
-            continue;
-          }
-
-          // Resolve phone number from direct JID, participantPn, or LID device registration mapping
-          const senderNumber = await resolvePhoneNumber(
-            userId,
-            jid,
-            (message.key as any)?.participantPn,
-            message.key.participant || undefined
-          );
-
-          if (!senderNumber || senderNumber.length < 5) {
-            continue;
-          }
-
-          const last10 = senderNumber.length >= 10 ? senderNumber.slice(-10) : senderNumber;
-
-          // Store message in memory for syncing
-          const userKey = `${userId}_${senderNumber}`;
-          if (!messageStore.has(userKey)) {
-            messageStore.set(userKey, []);
-          }
-          const messages = messageStore.get(userKey) || [];
-          messages.push(message);
-          messageStore.set(userKey, messages);
-
-          // Keep only last 100 messages in memory per contact
-          if (messages.length > 100) {
-            messages.shift();
-          }
-
-          // Only save incoming messages (from other people)
-          if (!message.key.fromMe && message.message) {
-            const rawMsg = extractActualMessage(message.message);
-            if (!rawMsg) continue;
-
-            // Skip protocol/reaction messages (e.g. reactions, deletes, ephemeral config)
-            if (rawMsg.protocolMessage || rawMsg.reactionMessage) {
-              continue;
-            }
-
-            // Parse message timestamp accurately from WhatsApp epoch
-            const msgTime = message.messageTimestamp
-              ? new Date(
-                  (typeof message.messageTimestamp === "string"
-                    ? parseInt(message.messageTimestamp)
-                    : Number(message.messageTimestamp)) * 1000
-                )
-              : new Date();
-
-            console.log("\n" + "=".repeat(80));
-            console.log("📨 INCOMING MESSAGE RECEIVED");
-            console.log("=".repeat(80));
-            console.log("👤 From:", senderNumber);
-            console.log("📱 Push Name:", message.pushName);
-            console.log("⏰ WhatsApp Time:", msgTime.toISOString());
-            console.log("=".repeat(80) + "\n");
-
-            const messageText =
-              rawMsg.conversation ||
-              rawMsg.extendedTextMessage?.text ||
-              rawMsg.imageMessage?.caption ||
-              rawMsg.videoMessage?.caption ||
-              rawMsg.documentMessage?.caption ||
-              "";
-
-            // Try to get contact name from WhatsApp
-            let contactName = senderNumber;
-            try {
-              const pushName = message.pushName || null;
-              const verifiedName = message.verifiedBizName || null;
-              contactName = verifiedName || pushName || senderNumber;
-            } catch (error) {
-              // Ignore
-            }
-
-            // Determine media type and URL from WhatsApp
-            let mediaType: string | null = null;
-            let mediaUrl: string | null = null;
-
-            if (rawMsg.imageMessage) {
-              const mime = rawMsg.imageMessage.mimetype || "image/jpeg";
-              mediaType = mime;
-              try {
-                const stream = await downloadContentFromMessage(rawMsg.imageMessage, "image");
-                const chunks: Buffer[] = [];
-                for await (const chunk of stream) chunks.push(chunk);
-                const buffer = Buffer.concat(chunks);
-                if (buffer.length > 0 && process.env.CLOUDINARY_API_KEY) {
-                  const ext = mime.split("/")[1] || "jpg";
-                  const fileName = `img_${Date.now()}.${ext}`;
-                  mediaUrl = await uploadBufferToCloudinary(buffer, mime, fileName);
-                }
-              } catch (err) {
-                console.error("Error downloading/uploading incoming image:", err);
-              }
-            } else if (rawMsg.videoMessage) {
-              const mime = rawMsg.videoMessage.mimetype || "video/mp4";
-              mediaType = mime;
-              try {
-                const stream = await downloadContentFromMessage(rawMsg.videoMessage, "video");
-                const chunks: Buffer[] = [];
-                for await (const chunk of stream) chunks.push(chunk);
-                const buffer = Buffer.concat(chunks);
-                if (buffer.length > 0 && process.env.CLOUDINARY_API_KEY) {
-                  const ext = mime.split("/")[1] || "mp4";
-                  const fileName = `vid_${Date.now()}.${ext}`;
-                  mediaUrl = await uploadBufferToCloudinary(buffer, mime, fileName);
-                }
-              } catch (err) {
-                console.error("Error downloading/uploading incoming video:", err);
-              }
-            } else if (rawMsg.audioMessage) {
-              const mime = rawMsg.audioMessage.mimetype || "audio/ogg";
-              mediaType = mime;
-              try {
-                const stream = await downloadContentFromMessage(rawMsg.audioMessage, "audio");
-                const chunks: Buffer[] = [];
-                for await (const chunk of stream) chunks.push(chunk);
-                const buffer = Buffer.concat(chunks);
-                if (buffer.length > 0 && process.env.CLOUDINARY_API_KEY) {
-                  const ext = mime.split("/")[1] || "ogg";
-                  const fileName = `aud_${Date.now()}.${ext}`;
-                  mediaUrl = await uploadBufferToCloudinary(buffer, mime, fileName);
-                }
-              } catch (err) {
-                console.error("Error downloading/uploading incoming audio:", err);
-              }
-            } else if (rawMsg.documentMessage) {
-              const mime = rawMsg.documentMessage.mimetype || "application/octet-stream";
-              mediaType = mime;
-              try {
-                const stream = await downloadContentFromMessage(rawMsg.documentMessage, "document");
-                const chunks: Buffer[] = [];
-                for await (const chunk of stream) chunks.push(chunk);
-                const buffer = Buffer.concat(chunks);
-                if (buffer.length > 0 && process.env.CLOUDINARY_API_KEY) {
-                  const fileName = rawMsg.documentMessage.fileName || `doc_${Date.now()}`;
-                  mediaUrl = await uploadBufferToCloudinary(buffer, mime, fileName);
-                }
-              } catch (err) {
-                console.error("Error downloading/uploading incoming document:", err);
-              }
-            }
-
-            // Match contact by full number or last 10 digits
-            let contact = await db.query.contacts.findFirst({
-              where: and(
-                eq(contacts.userId, parseInt(userId)),
-                or(
-                  eq(contacts.phoneNumber, senderNumber),
-                  sql`${contacts.phoneNumber} LIKE ${'%' + last10}`
-                )
-              ),
-            });
-
-            if (!contact) {
-              const [result] = await db
-                .insert(contacts)
-                .values({
-                  userId: parseInt(userId),
-                  phoneNumber: senderNumber,
-                  name: contactName,
-                  lastMessageAt: msgTime,
-                })
-                .$returningId();
-              contact = await db.query.contacts.findFirst({
-                where: eq(contacts.id, result.id),
-              });
-            } else {
-              const updateData: any = { lastMessageAt: msgTime };
-              if (
-                contactName &&
-                contactName !== senderNumber &&
-                (!contact.name || contact.name === contact.phoneNumber)
-              ) {
-                updateData.name = contactName;
-              }
-              await db
-                .update(contacts)
-                .set(updateData)
-                .where(eq(contacts.id, contact.id));
-            }
-
-            if (!contact) {
-              console.error("Could not find or create contact for message");
-              continue;
-            }
-
-            const finalMessage =
-              messageText ||
-              rawMsg.imageMessage?.caption ||
-              rawMsg.videoMessage?.caption ||
-              rawMsg.documentMessage?.caption ||
-              null;
-
-            // Save the message
-            const messageData = {
-              userId: parseInt(userId),
-              contactId: contact.id,
-              phoneNumber: contact.phoneNumber || senderNumber,
-              message: finalMessage,
-              mediaType,
-              mediaUrl,
-              isFromMe: false,
-              timestamp: msgTime,
-            };
-
-            const [savedResult] = await db
-              .insert(chatMessages)
-              .values(messageData)
-              .$returningId();
-
-            console.log(`✅ Saved incoming message ID ${savedResult.id} from ${senderNumber} (Contact ID: ${contact.id})`);
-          }
-        } catch (error) {
-          console.error("Error processing incoming message:", error);
         }
+      } catch (err) {
+        console.error("Error processing history sync:", err);
       }
     });
 
@@ -1251,6 +1231,7 @@ export async function reconnectSession(userId: string) {
       existing.sock.ev.removeAllListeners("connection.update");
       existing.sock.ev.removeAllListeners("creds.update");
       existing.sock.ev.removeAllListeners("messages.upsert");
+      existing.sock.ev.removeAllListeners("messaging-history.set");
       existing.sock.end(new Error("Socket reload requested"));
     } catch (e) {
       // Ignore

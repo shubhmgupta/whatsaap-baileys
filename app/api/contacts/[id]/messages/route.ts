@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { chatMessages } from '@/db/schema';
+import { contacts, chatMessages } from '@/db/schema';
 import { eq, and, or, desc, sql } from 'drizzle-orm';
 
-// Get chat messages for a contact
+// Get chat messages for a saved contact
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
@@ -16,13 +16,26 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
             return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
         }
 
-        const cleanPhone = (phoneNumber || '').replace(/[^0-9]/g, '');
+        // Verify this contact is a saved contact in the database
+        const savedContact = await db.query.contacts.findFirst({
+            where: and(
+                eq(contacts.userId, parseInt(userId)),
+                eq(contacts.id, contactId)
+            )
+        });
+
+        if (!savedContact) {
+            return NextResponse.json({ error: 'Saved contact not found in database', messages: [] }, { status: 404 });
+        }
+
+        const cleanPhone = (phoneNumber || savedContact.phoneNumber || '').replace(/[^0-9]/g, '');
         const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
 
-        // Query by contactId OR phone number (with or without country code)
+        // Query messages for this saved contact
         const messages = await db.query.chatMessages.findMany({
             where: and(
                 eq(chatMessages.userId, parseInt(userId)),
+                eq(chatMessages.contactId, contactId),
                 or(
                     eq(chatMessages.contactId, contactId),
                     eq(chatMessages.phoneNumber, phoneNumber || ''),
@@ -31,10 +44,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
                 )
             ),
             orderBy: [desc(chatMessages.timestamp)],
-            limit: 100,
+            limit: 200,
         });
 
-        return NextResponse.json({ messages: messages.reverse() });
+        return NextResponse.json({ messages: messages.reverse(), contact: savedContact });
     } catch (error) {
         console.error('Get chat messages error:', error);
         return NextResponse.json({ error: 'Failed to get messages' }, { status: 500 });

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { chatMessages } from '@/db/schema';
+import { chatMessages, contacts } from '@/db/schema';
 import { eq, and, or, desc, sql } from 'drizzle-orm';
 
 export async function GET(request: Request) {
@@ -14,10 +14,26 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
+    // STRICT: Only fetch messages belonging to SAVED contacts in the database
     let query = db
-      .select()
+      .select({
+        id: chatMessages.id,
+        userId: chatMessages.userId,
+        contactId: chatMessages.contactId,
+        contactName: contacts.name,
+        phoneNumber: chatMessages.phoneNumber,
+        message: chatMessages.message,
+        mediaUrl: chatMessages.mediaUrl,
+        mediaType: chatMessages.mediaType,
+        isFromMe: chatMessages.isFromMe,
+        timestamp: chatMessages.timestamp,
+      })
       .from(chatMessages)
-      .where(eq(chatMessages.userId, parseInt(userId)))
+      .innerJoin(contacts, eq(chatMessages.contactId, contacts.id))
+      .where(and(
+        eq(chatMessages.userId, parseInt(userId)),
+        eq(contacts.userId, parseInt(userId))
+      ))
       .orderBy(desc(chatMessages.timestamp))
       .limit(limit);
 
@@ -27,11 +43,24 @@ export async function GET(request: Request) {
       const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
 
       query = db
-        .select()
+        .select({
+          id: chatMessages.id,
+          userId: chatMessages.userId,
+          contactId: chatMessages.contactId,
+          contactName: contacts.name,
+          phoneNumber: chatMessages.phoneNumber,
+          message: chatMessages.message,
+          mediaUrl: chatMessages.mediaUrl,
+          mediaType: chatMessages.mediaType,
+          isFromMe: chatMessages.isFromMe,
+          timestamp: chatMessages.timestamp,
+        })
         .from(chatMessages)
+        .innerJoin(contacts, eq(chatMessages.contactId, contacts.id))
         .where(
           and(
             eq(chatMessages.userId, parseInt(userId)),
+            eq(contacts.userId, parseInt(userId)),
             or(
               eq(chatMessages.phoneNumber, phoneNumber),
               eq(chatMessages.phoneNumber, cleanPhone),

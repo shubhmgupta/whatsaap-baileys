@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getUserFromToken } from '@/lib/api-auth';
 import { db } from '@/lib/db';
 import { chatMessages, contacts } from '@/db/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, or, desc, sql } from 'drizzle-orm';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -47,30 +47,26 @@ export async function GET(request: Request) {
             }, { status: 400, headers: corsHeaders });
         }
 
-        // Find or create contact
-        let contact = await db.query.contacts.findFirst({
+        // Find saved contact in database
+        const cleanPhone = phoneNumber.replace(/[^0-9]/g, '');
+        const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
+
+        const contact = await db.query.contacts.findFirst({
             where: and(
                 eq(contacts.userId, userId),
-                eq(contacts.phoneNumber, phoneNumber)
+                or(
+                    eq(contacts.phoneNumber, phoneNumber),
+                    eq(contacts.phoneNumber, cleanPhone),
+                    sql`${contacts.phoneNumber} LIKE ${'%' + last10}`
+                )
             )
         });
 
         if (!contact) {
-            // Create contact if it doesn't exist
-            const [result] = await db.insert(contacts).values({
-                userId,
-                phoneNumber,
-                name: phoneNumber
-            }).$returningId();
-            contact = await db.query.contacts.findFirst({
-                where: eq(contacts.id, result.id)
-            });
-        }
-
-        if (!contact) {
+            // Only return messages for saved contacts in the database
             return NextResponse.json({
-                error: 'Failed to find or create contact'
-            }, { status: 500, headers: corsHeaders });
+                messages: []
+            }, { status: 200, headers: corsHeaders });
         }
 
         // Get messages for this contact (last 100 messages in chronological order)

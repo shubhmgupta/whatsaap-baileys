@@ -125,7 +125,7 @@ export default function MessagesDashboard() {
 
   const loadContacts = async (userId: number) => {
     try {
-      const res = await fetch(`/api/contacts?userId=${userId}`);
+      const res = await fetch(`/api/contacts?userId=${userId}&limit=1000`);
       if (res.ok) {
         const data = await res.json();
         setContacts(data.contacts || []);

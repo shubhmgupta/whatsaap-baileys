@@ -154,7 +154,7 @@ export default function InboxPage() {
   const loadContacts = async (userId: number, showSpinner: boolean = true) => {
     if (showSpinner) setLoading(true);
     try {
-      const res = await fetch(`/api/contacts?userId=${userId}`);
+      const res = await fetch(`/api/contacts?userId=${userId}&limit=1000`);
       if (res.ok) {
         const data = await res.json();
         setContacts(data.contacts || []);
