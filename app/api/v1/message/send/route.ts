@@ -103,14 +103,8 @@ export async function POST(request: Request) {
       }, { status: 400, headers: corsHeaders });
     }
 
-    const formattedNumber = phoneNumber.includes('@') ? phoneNumber : `${phoneNumber}@s.whatsapp.net`;
-    const [result] = await session.sock.onWhatsApp(phoneNumber);
-
-    if (!result?.exists) {
-      return NextResponse.json({
-        error: 'Recipient is not on WhatsApp'
-      }, { status: 400, headers: corsHeaders });
-    }
+    const cleanNumber = phoneNumber.replace(/[^0-9]/g, '');
+    const targetJid = phoneNumber.includes('@') ? phoneNumber : `${cleanNumber}@s.whatsapp.net`;
 
     let outgoingMediaUrl: string | null = null;
 
@@ -122,104 +116,90 @@ export async function POST(request: Request) {
       const mimeType = file.type || 'application/octet-stream';
       const fileName = file.name || 'document';
 
-      // Try uploading to Cloudinary first so we can save the full URL in DB
-      try {
-        outgoingMediaUrl = await uploadBufferToCloudinary(buffer, mimeType, fileName);
-        console.log('   🔗 Outgoing file uploaded to Cloudinary:', outgoingMediaUrl);
-      } catch (err) {
-        console.warn('   ⚠️ Failed to upload outgoing file to Cloudinary (delivering directly via WhatsApp):', err);
-        outgoingMediaUrl = null;
+      let waPayload: any;
+      if (mimeType.startsWith('image/')) {
+        waPayload = { image: buffer, caption: message || undefined, mimetype: mimeType };
+      } else if (mimeType.startsWith('video/')) {
+        waPayload = { video: buffer, caption: message || undefined, mimetype: mimeType };
+      } else if (mimeType.startsWith('audio/')) {
+        waPayload = { audio: buffer, mimetype: mimeType };
+      } else {
+        waPayload = { document: buffer, mimetype: mimeType, fileName, caption: message || undefined };
       }
 
-      if (mimeType.startsWith('image/')) {
-        // Image with optional caption (text)
-        await session.sock.sendMessage(result.jid, {
-          image: buffer,
-          caption: message || undefined,
-          mimetype: mimeType,
-        });
-      } else if (mimeType.startsWith('video/')) {
-        // Video with optional caption (text)
-        await session.sock.sendMessage(result.jid, {
-          video: buffer,
-          caption: message || undefined,
-          mimetype: mimeType,
-        });
-      } else if (mimeType.startsWith('audio/')) {
-        // Audio (no caption support in WhatsApp)
-        await session.sock.sendMessage(result.jid, {
-          audio: buffer,
-          mimetype: mimeType,
-        });
-        // If text provided, send it as separate message
-        if (message) {
-          await session.sock.sendMessage(result.jid, { text: message });
-        }
-      } else {
-        // Document with optional caption (text)
-        await session.sock.sendMessage(result.jid, {
-          document: buffer,
-          mimetype: mimeType,
-          fileName: fileName,
-          caption: message || undefined,
-        });
+      // Concurrently transmit to WhatsApp and upload to Cloudinary in parallel
+      const [waResult, cloudResult] = await Promise.allSettled([
+        session.sock.sendMessage(targetJid, waPayload).then(async (res: any) => {
+          if (mimeType.startsWith('audio/') && message) {
+            await session.sock.sendMessage(targetJid, { text: message });
+          }
+          return res;
+        }),
+        uploadBufferToCloudinary(buffer, mimeType, fileName).catch((err) => {
+          console.warn('   ⚠️ Cloudinary upload warning (direct WhatsApp delivery still succeeded):', err?.message || err);
+          return null;
+        })
+      ]);
+
+      if (waResult.status === 'rejected') {
+        const errorMsg = waResult.reason?.message || 'Failed to deliver message via WhatsApp';
+        console.error('WhatsApp dispatch error:', errorMsg);
+        return NextResponse.json({ error: errorMsg }, { status: 400, headers: corsHeaders });
       }
+
+      outgoingMediaUrl = cloudResult.status === 'fulfilled' ? cloudResult.value : null;
     } else if (message) {
-      // Text only (no file)
-      await session.sock.sendMessage(result.jid, { text: message });
+      // Direct text send
+      await session.sock.sendMessage(targetJid, { text: message });
     }
 
-    // Deduct credit
-    await db.update(users).set({ credits: user.credits - 1 }).where(eq(users.id, userId));
-
-    // Save message
-    await db.insert(messages).values({
+    // Deduct credit & record log concurrently
+    const userUpdatePromise = db.update(users).set({ credits: user.credits - 1 }).where(eq(users.id, userId));
+    const messageLogPromise = db.insert(messages).values({
       userId,
-      message: message || `Sent file: ${file?.name}`
+      message: message || `Sent file: ${file?.name || 'media'}`
     });
 
     // Save or update contact
     let contact = await db.query.contacts.findFirst({
       where: and(
         eq(contacts.userId, userId),
-        eq(contacts.phoneNumber, phoneNumber)
+        eq(contacts.phoneNumber, cleanNumber)
       ),
     });
 
+    let contactId: number;
     if (!contact) {
-      const [result] = await db.insert(contacts).values({
+      const [newContact] = await db.insert(contacts).values({
         userId,
-        phoneNumber,
-        name: phoneNumber,
+        phoneNumber: cleanNumber,
+        name: cleanNumber,
         lastMessageAt: new Date(),
       }).$returningId();
-      contact = await db.query.contacts.findFirst({
-        where: eq(contacts.id, result.id),
-      });
+      contactId = newContact.id;
     } else {
+      contactId = contact.id;
       await db.update(contacts)
         .set({ lastMessageAt: new Date() })
         .where(eq(contacts.id, contact.id));
     }
 
-    if (!contact) {
-      throw new Error('Failed to create contact');
-    }
-
     // Save chat message
-    await db.insert(chatMessages).values({
+    const chatMessagePromise = db.insert(chatMessages).values({
       userId,
-      contactId: contact.id,
-      phoneNumber,
+      contactId,
+      phoneNumber: cleanNumber,
       message: message || null,
       mediaUrl: outgoingMediaUrl,
       mediaType: file?.type || null,
       isFromMe: true,
     });
 
+    await Promise.all([userUpdatePromise, messageLogPromise, chatMessagePromise]);
+
     return NextResponse.json({
       message: 'Message sent successfully',
-      contactId: contact.id,
+      contactId,
       remainingCredits: user.credits - 1
     }, { headers: corsHeaders });
 

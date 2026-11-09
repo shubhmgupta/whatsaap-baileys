@@ -1,7 +1,28 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Send, Phone, Loader2, Search, User, Image as ImageIcon, File, FileText, Music, Video, Download } from 'lucide-react';
+import { 
+  ArrowLeft, 
+  Send, 
+  Phone, 
+  Loader2, 
+  Search, 
+  User, 
+  Image as ImageIcon, 
+  File as FileIcon, 
+  FileText, 
+  Music, 
+  Video, 
+  Download,
+  Paperclip,
+  X,
+  RefreshCw,
+  Sparkles,
+  ExternalLink,
+  MessageSquare,
+  Clock,
+  CheckCheck
+} from 'lucide-react';
 import Link from 'next/link';
 
 interface Contact {
@@ -30,8 +51,10 @@ export default function InboxPage() {
   const [sendLoading, setSendLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
   const [showChat, setShowChat] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const userData = sessionStorage.getItem('user');
@@ -39,20 +62,27 @@ export default function InboxPage() {
       const parsedUser = JSON.parse(userData);
       setUser(parsedUser);
       loadContacts(parsedUser.id);
+
+      // Periodically refresh contact list every 12 seconds to discover new inbound chats
+      const contactInterval = setInterval(() => {
+        loadContacts(parsedUser.id, false);
+      }, 12000);
+      return () => clearInterval(contactInterval);
     }
   }, []);
 
   useEffect(() => {
-    if (selectedContact) {
+    if (selectedContact && user) {
       setShowChat(true);
       loadMessages(selectedContact.id, selectedContact.phoneNumber);
-      // Auto-refresh messages every 3 seconds
+      
+      // Auto-refresh messages every 3 seconds for active conversation
       const interval = setInterval(() => {
         loadMessages(selectedContact.id, selectedContact.phoneNumber);
       }, 3000);
       return () => clearInterval(interval);
     }
-  }, [selectedContact]);
+  }, [selectedContact, user]);
 
   useEffect(() => {
     scrollToBottom();
@@ -62,8 +92,8 @@ export default function InboxPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const loadContacts = async (userId: number) => {
-    setLoading(true);
+  const loadContacts = async (userId: number, showSpinner: boolean = true) => {
+    if (showSpinner) setLoading(true);
     try {
       const res = await fetch(`/api/contacts?userId=${userId}`);
       if (res.ok) {
@@ -73,31 +103,41 @@ export default function InboxPage() {
     } catch (error) {
       console.error('Failed to load contacts:', error);
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
     }
   };
 
   const loadMessages = async (contactId: number, phoneNumber: string) => {
+    if (!user) return;
     try {
-      const res = await fetch(`/api/contacts/${contactId}/messages?userId=${user?.id}&phoneNumber=${phoneNumber}`);
+      const res = await fetch(`/api/contacts/${contactId}/messages?userId=${user.id}&phoneNumber=${phoneNumber}`);
       if (res.ok) {
         const data = await res.json();
-        console.log('📬 Loaded messages:', data.messages?.length || 0);
-        
-        // Log media messages for debugging
-        const mediaMessages = data.messages?.filter((m: Message) => m.mediaUrl) || [];
-        if (mediaMessages.length > 0) {
-          console.log('🖼️ Media messages found:', mediaMessages.length);
-          mediaMessages.forEach((msg: Message, idx: number) => {
-            console.log(`   ${idx + 1}. Type: ${msg.mediaType}, URL: ${msg.mediaUrl}`);
-          });
-        }
-        
         setMessages(data.messages || []);
       }
     } catch (error) {
       console.error('Failed to load messages:', error);
     }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = () => setFilePreview(reader.result as string);
+        reader.readAsDataURL(file);
+      } else {
+        setFilePreview(null);
+      }
+    }
+  };
+
+  const clearSelectedFile = () => {
+    setSelectedFile(null);
+    setFilePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -107,11 +147,13 @@ export default function InboxPage() {
     setSendLoading(true);
     try {
       if (selectedFile) {
-        // Send file
+        // Send file + optional text
         const formData = new FormData();
         formData.append('userId', user.id.toString());
         formData.append('phoneNumber', selectedContact.phoneNumber);
-        formData.append('message', newMessage || '');
+        if (newMessage.trim()) {
+          formData.append('message', newMessage.trim());
+        }
         formData.append('file', selectedFile);
 
         const res = await fetch('/api/message/send', {
@@ -121,11 +163,11 @@ export default function InboxPage() {
 
         if (res.ok) {
           setNewMessage('');
-          setSelectedFile(null);
+          clearSelectedFile();
           await loadMessages(selectedContact.id, selectedContact.phoneNumber);
         } else {
           const data = await res.json();
-          alert(data.error || 'Failed to send message');
+          alert(data.error || 'Failed to dispatch message');
         }
       } else {
         // Send text only
@@ -135,7 +177,7 @@ export default function InboxPage() {
           body: JSON.stringify({
             userId: user.id,
             phoneNumber: selectedContact.phoneNumber,
-            message: newMessage,
+            message: newMessage.trim(),
           }),
         });
 
@@ -144,7 +186,7 @@ export default function InboxPage() {
           await loadMessages(selectedContact.id, selectedContact.phoneNumber);
         } else {
           const data = await res.json();
-          alert(data.error || 'Failed to send message');
+          alert(data.error || 'Failed to dispatch message');
         }
       }
     } catch (error) {
@@ -155,114 +197,86 @@ export default function InboxPage() {
     }
   };
 
-  const getMediaIcon = (mediaType: string | null) => {
-    switch (mediaType) {
-      case 'image':
-        return <ImageIcon className="w-4 h-4" />;
-      case 'video':
-        return <Video className="w-4 h-4" />;
-      case 'audio':
-        return <Music className="w-4 h-4" />;
-      case 'document':
-        return <FileText className="w-4 h-4" />;
-      default:
-        return <File className="w-4 h-4" />;
-    }
-  };
-
   const renderMedia = (msg: Message) => {
     if (!msg.mediaUrl) return null;
-
     const mediaType = msg.mediaType?.toLowerCase() || '';
-    
-    // Check if it's an image (supports various formats)
-    if (mediaType.includes('image') || mediaType === 'image' || /\.(jpg|jpeg|png|gif|webp)$/i.test(msg.mediaUrl)) {
+
+    // Image preview
+    if (mediaType.includes('image') || /\.(jpg|jpeg|png|gif|webp)$/i.test(msg.mediaUrl)) {
       return (
-        <div className="mt-2">
-          <div className="relative group">
+        <div className="mt-2 space-y-2">
+          <div className="relative group overflow-hidden rounded-xl border border-white/10 max-w-xs">
             <img
               src={msg.mediaUrl}
-              alt="Shared image"
-              className="max-w-[200px] max-h-[150px] object-cover rounded-lg cursor-pointer hover:opacity-90 transition"
+              alt="Shared media"
+              className="max-h-64 w-full object-cover cursor-pointer hover:scale-[1.02] transition duration-200"
               onClick={() => window.open(msg.mediaUrl!, '_blank')}
             />
-            <a
-              href={msg.mediaUrl}
-              download
-              className="absolute top-2 right-2 p-1.5 bg-black/70 hover:bg-black/90 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Download className="w-3 h-3 text-white" />
-            </a>
-          </div>
-          <div className="flex gap-2 mt-2">
-            <button
-              onClick={() => window.open(msg.mediaUrl!, '_blank')}
-              className="flex-1 flex items-center justify-center gap-1 p-1.5 bg-black/20 rounded hover:bg-black/30 transition text-xs"
-            >
-              <ImageIcon className="w-3 h-3" />
-              View Full
-            </button>
-            <a
-              href={msg.mediaUrl}
-              download
-              className="flex-1 flex items-center justify-center gap-1 p-1.5 bg-black/20 rounded hover:bg-black/30 transition text-xs"
-            >
-              <Download className="w-3 h-3" />
-              Download
-            </a>
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2">
+              <a
+                href={msg.mediaUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-2 rounded-lg bg-black/70 hover:bg-black/90 text-white text-xs flex items-center gap-1"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>View Full</span>
+              </a>
+              <a
+                href={msg.mediaUrl}
+                download
+                className="p-2 rounded-lg bg-emerald-600/80 hover:bg-emerald-600 text-white text-xs flex items-center gap-1"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Save</span>
+              </a>
+            </div>
           </div>
         </div>
       );
     }
-    
-    // Check if it's a video
-    if (mediaType.includes('video') || mediaType === 'video' || /\.(mp4|webm|ogg|mov)$/i.test(msg.mediaUrl)) {
+
+    // Video preview
+    if (mediaType.includes('video') || /\.(mp4|webm|ogg|mov)$/i.test(msg.mediaUrl)) {
       return (
-        <div className="mt-2">
+        <div className="mt-2 space-y-2 max-w-sm">
           <video
             src={msg.mediaUrl}
             controls
-            className="max-w-full max-h-[300px] sm:max-h-[400px] rounded-lg"
+            className="w-full rounded-xl border border-white/10 max-h-72"
           />
-          <a
-            href={msg.mediaUrl}
-            download
-            className="flex items-center justify-center gap-2 p-2 bg-black/20 rounded hover:bg-black/30 transition text-xs mt-2"
-          >
-            <Download className="w-3 h-3" />
-            Download Video
-          </a>
         </div>
       );
     }
-    
-    // Check if it's audio
-    if (mediaType.includes('audio') || mediaType === 'audio' || /\.(mp3|wav|ogg|m4a)$/i.test(msg.mediaUrl)) {
+
+    // Audio preview
+    if (mediaType.includes('audio') || /\.(mp3|wav|ogg|m4a)$/i.test(msg.mediaUrl)) {
       return (
         <div className="mt-2">
-          <audio src={msg.mediaUrl} controls className="w-full" />
-          <a
-            href={msg.mediaUrl}
-            download
-            className="flex items-center justify-center gap-2 p-2 bg-black/20 rounded hover:bg-black/30 transition text-xs mt-2"
-          >
-            <Download className="w-3 h-3" />
-            Download Audio
-          </a>
+          <audio src={msg.mediaUrl} controls className="w-full min-w-[220px]" />
         </div>
       );
     }
-    
-    // Default: document or other file type
+
+    // Document / PDF
     return (
       <a
         href={msg.mediaUrl}
+        target="_blank"
+        rel="noopener noreferrer"
         download
-        className="mt-2 flex items-center gap-2 p-2 bg-black/20 rounded hover:bg-black/30 transition"
+        className="mt-2 flex items-center gap-2.5 p-3 rounded-xl bg-black/30 hover:bg-black/40 border border-white/10 transition text-xs group"
       >
-        <Download className="w-4 h-4" />
-        <span className="text-sm">Download {msg.mediaType || 'file'}</span>
+        <div className="p-2 rounded-lg bg-emerald-500/20 text-emerald-400 group-hover:bg-emerald-500 group-hover:text-black transition">
+          <FileText className="w-4 h-4" />
+        </div>
+        <div className="flex-1 truncate">
+          <p className="font-semibold text-white truncate">Attached Document</p>
+          <p className="text-[10px] text-slate-400 uppercase tracking-wider">{msg.mediaType || 'File'}</p>
+        </div>
+        <Download className="w-4 h-4 text-slate-400 group-hover:text-white transition" />
       </a>
     );
   };
@@ -272,7 +286,7 @@ export default function InboxPage() {
   );
 
   const getContactDisplayName = (contact: Contact) => {
-    return contact.name || contact.phoneNumber;
+    return contact.name || `+${contact.phoneNumber}`;
   };
 
   const handleBackToContacts = () => {
@@ -282,225 +296,287 @@ export default function InboxPage() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center">
-        <div className="text-white">Loading...</div>
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="p-4 lg:p-6 max-w-7xl mx-auto space-y-4">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-4">
+      {/* Header */}
       <div className="flex items-center justify-between pb-1">
         <div>
-          <h1 className="text-2xl lg:text-3xl font-extrabold text-white tracking-tight">
+          <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium mb-1">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Real-time Chat Stream</span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight flex items-center gap-3">
             Live Chat Inbox
           </h1>
-          <p className="text-xs text-gray-400 mt-1">Real-time conversations with your WhatsApp contacts</p>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Two-way conversations and incoming WhatsApp messages synced in real time
+          </p>
         </div>
+
+        <button
+          onClick={() => user && loadContacts(user.id, true)}
+          className="p-2 text-slate-400 hover:text-white rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/80 transition"
+          title="Refresh contacts"
+        >
+          <RefreshCw className="w-4 h-4" />
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-160px)]">
-          {/* Contacts List */}
-          <div className={`lg:col-span-1 bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700/50 flex flex-col overflow-hidden ${
-            showChat ? 'hidden lg:flex' : 'flex'
-          }`}>
-            <div className="p-4 border-b border-gray-700/50">
-              <h2 className="text-xl font-bold text-white mb-3">Contacts</h2>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search contacts..."
-                  className="w-full pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+      {/* Main Chat Interface Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 h-[calc(100vh-210px)] min-h-[520px]">
+        {/* Left Contacts Sidebar (4 columns) */}
+        <div className={`lg:col-span-4 bg-slate-900/60 backdrop-blur-xl rounded-2xl border border-slate-800 flex flex-col overflow-hidden shadow-xl ${
+          showChat ? 'hidden lg:flex' : 'flex'
+        }`}>
+          {/* Search Contacts */}
+          <div className="p-4 border-b border-slate-800 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-bold text-white uppercase tracking-wider">Conversations</h2>
+              <span className="text-xs font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                {contacts.length} chats
+              </span>
             </div>
-
-            <div className="flex-1 overflow-y-auto">
-              {loading ? (
-                <div className="flex items-center justify-center h-full">
-                  <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
-                </div>
-              ) : filteredContacts.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-gray-400 p-6 text-center">
-                  <User className="w-12 h-12 mb-2 opacity-50" />
-                  <p>No contacts found</p>
-                  <p className="text-sm mt-1">Contacts will appear here when you receive messages</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-gray-700/50">
-                  {filteredContacts.map((contact) => (
-                    <button
-                      key={contact.id}
-                      onClick={() => setSelectedContact(contact)}
-                      className={`w-full p-4 text-left hover:bg-gray-700/30 transition border-b border-gray-750 ${
-                        selectedContact?.id === contact.id ? 'bg-emerald-500/10 border-l-4 border-emerald-500' : ''
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold">
-                          {getContactDisplayName(contact).charAt(0).toUpperCase()}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="font-semibold text-white truncate">
-                            {getContactDisplayName(contact)}
-                          </div>
-                          <div className="text-sm text-gray-400 flex items-center gap-1">
-                            <Phone className="w-3 h-3" />
-                            {contact.phoneNumber}
-                          </div>
-                        </div>
-                      </div>
-                      {contact.lastMessageAt && (
-                        <div className="text-xs text-gray-500 mt-1">
-                          {new Date(contact.lastMessageAt).toLocaleString()}
-                        </div>
-                      )}
-                    </button>
-                  ))}
-                </div>
+            <div className="relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search conversations..."
+                className="w-full pl-9 pr-8 py-2 bg-slate-800/80 border border-slate-700/80 rounded-xl text-white placeholder-slate-500 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 transition"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
               )}
             </div>
           </div>
 
-          {/* Chat Area */}
-          <div className={`lg:col-span-2 bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700/50 flex flex-col overflow-hidden ${
-            showChat ? 'flex' : 'hidden lg:flex'
-          }`}>
-            {selectedContact ? (
-              <>
-                {/* Chat Header */}
-                <div className="p-4 border-b border-gray-700/50 bg-gray-800/80">
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={handleBackToContacts}
-                      className="lg:hidden p-2 hover:bg-gray-700 rounded-lg transition -ml-2"
-                    >
-                      <ArrowLeft className="w-5 h-5 text-white" />
-                    </button>
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold">
-                      {getContactDisplayName(selectedContact).charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <div className="font-semibold text-white">
-                        {getContactDisplayName(selectedContact)}
-                      </div>
-                      <div className="text-sm text-gray-400 flex items-center gap-1">
-                        <Phone className="w-3 h-3" />
-                        {selectedContact.phoneNumber}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                  {messages.length === 0 ? (
-                    <div className="flex items-center justify-center h-full text-gray-400">
-                      <p>No messages yet. Start the conversation!</p>
-                    </div>
-                  ) : (
-                    messages.map((msg) => (
-                      <div
-                        key={msg.id}
-                        className={`flex ${msg.isFromMe ? 'justify-end' : 'justify-start'}`}
-                      >
-                        <div
-                          className={`max-w-[70%] rounded-2xl p-3.5 shadow-md ${
-                            msg.isFromMe
-                              ? 'bg-emerald-600 text-white rounded-tr-xs'
-                              : 'bg-gray-800 text-gray-100 border border-gray-700/70 rounded-tl-xs'
-                          }`}
-                        >
-                          {msg.message && (
-                            <p className="text-sm break-words">{msg.message}</p>
-                          )}
-                          
-                          {msg.mediaUrl && renderMedia(msg)}
-                          
-                          {msg.mediaType && !msg.mediaUrl && (
-                            <div className="flex items-center gap-2 text-xs opacity-75 mt-1">
-                              {getMediaIcon(msg.mediaType)}
-                              <span className="capitalize">{msg.mediaType}</span>
-                            </div>
-                          )}
-                          
-                          <p className="text-xs opacity-75 mt-1">
-                            {new Date(msg.timestamp).toLocaleTimeString()}
-                          </p>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                  <div ref={messagesEndRef} />
-                </div>
-
-                {/* Message Input */}
-                <form onSubmit={handleSendMessage} className="p-4 border-t border-gray-700/50">
-                  {selectedFile && (
-                    <div className="mb-2 p-2 bg-gray-700/50 rounded-lg flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-sm text-gray-300">
-                        <File className="w-4 h-4" />
-                        <span>{selectedFile.name}</span>
-                        <span className="text-xs text-gray-500">
-                          ({(selectedFile.size / 1024).toFixed(1)} KB)
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedFile(null)}
-                        className="text-red-400 hover:text-red-300"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  )}
-                  <div className="flex gap-2">
-                    <label className="px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-gray-300 hover:bg-gray-600 transition cursor-pointer flex items-center gap-2">
-                      <File className="w-5 h-5" />
-                      <input
-                        type="file"
-                        onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-                        className="hidden"
-                        accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx"
-                        disabled={sendLoading}
-                      />
-                    </label>
-                    <input
-                      type="text"
-                      value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      placeholder="Type a WhatsApp message..."
-                      className="flex-1 px-4 py-3 bg-gray-700/80 border border-gray-600/80 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                      disabled={sendLoading}
-                    />
-                    <button
-                      type="submit"
-                      disabled={sendLoading || (!newMessage.trim() && !selectedFile)}
-                      className="px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-xl font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-lg shadow-emerald-500/20"
-                    >
-                      {sendLoading ? (
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                      ) : (
-                        <Send className="w-5 h-5" />
-                      )}
-                      Send
-                    </button>
-                  </div>
-                </form>
-              </>
-            ) : (
-              <div className="flex items-center justify-center h-full text-gray-400">
-                <div className="text-center">
-                  <User className="w-16 h-16 mx-auto mb-3 opacity-50" />
-                  <p className="text-lg">Select a contact to start chatting</p>
-                </div>
+          {/* Contact Scroll List */}
+          <div className="flex-1 overflow-y-auto divide-y divide-slate-800/60">
+            {loading ? (
+              <div className="flex items-center justify-center h-48">
+                <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
               </div>
+            ) : filteredContacts.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-48 text-slate-500 text-center p-6 space-y-2">
+                <User className="w-8 h-8 opacity-40" />
+                <p className="text-xs font-medium text-slate-400">No conversations yet</p>
+                <p className="text-[11px] text-slate-500">
+                  When recipients message your WhatsApp number, they will automatically appear here.
+                </p>
+              </div>
+            ) : (
+              filteredContacts.map((contact) => {
+                const isSelected = selectedContact?.id === contact.id;
+                return (
+                  <button
+                    key={contact.id}
+                    onClick={() => setSelectedContact(contact)}
+                    className={`w-full p-4 text-left transition flex items-center gap-3 cursor-pointer ${
+                      isSelected
+                        ? 'bg-emerald-500/10 border-l-4 border-emerald-500'
+                        : 'hover:bg-slate-800/40'
+                    }`}
+                  >
+                    <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-emerald-400 font-bold text-xs flex-shrink-0">
+                      {getContactDisplayName(contact).charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-0.5">
+                        <p className={`text-sm font-semibold truncate ${isSelected ? 'text-emerald-300' : 'text-white'}`}>
+                          {getContactDisplayName(contact)}
+                        </p>
+                      </div>
+                      <p className="text-xs text-slate-400 font-mono truncate">
+                        +{contact.phoneNumber}
+                      </p>
+                      {contact.lastMessageAt && (
+                        <p className="text-[10px] text-slate-500 mt-1 flex items-center gap-1 font-mono">
+                          <Clock className="w-3 h-3" />
+                          <span>{new Date(contact.lastMessageAt).toLocaleDateString()}</span>
+                        </p>
+                      )}
+                    </div>
+                  </button>
+                );
+              })
             )}
           </div>
         </div>
+
+        {/* Right Active Chat Pane (8 columns) */}
+        <div className={`lg:col-span-8 bg-slate-900/60 backdrop-blur-xl rounded-2xl border border-slate-800 flex flex-col overflow-hidden shadow-xl ${
+          showChat ? 'flex' : 'hidden lg:flex'
+        }`}>
+          {selectedContact ? (
+            <>
+              {/* Chat Header */}
+              <div className="p-4 sm:p-5 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleBackToContacts}
+                    className="lg:hidden p-1.5 hover:bg-slate-800 rounded-lg text-slate-300"
+                  >
+                    <ArrowLeft className="w-5 h-5" />
+                  </button>
+                  <div className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold text-sm">
+                    {getContactDisplayName(selectedContact).charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white leading-tight">
+                      {getContactDisplayName(selectedContact)}
+                    </h3>
+                    <p className="text-xs text-slate-400 font-mono">+{selectedContact.phoneNumber}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => loadMessages(selectedContact.id, selectedContact.phoneNumber)}
+                    className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition"
+                    title="Refresh conversation"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Chat Timeline */}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3.5">
+                {messages.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-center text-slate-500 space-y-2">
+                    <MessageSquare className="w-10 h-10 opacity-30" />
+                    <p className="text-xs">No messages recorded in this chat.</p>
+                    <p className="text-[11px]">Type below to send a WhatsApp message.</p>
+                  </div>
+                ) : (
+                  messages.map((msg) => (
+                    <div
+                      key={msg.id}
+                      className={`flex ${msg.isFromMe ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div
+                        className={`max-w-[85%] sm:max-w-[70%] rounded-2xl p-3.5 text-sm shadow-md ${
+                          msg.isFromMe
+                            ? 'bg-emerald-950/40 text-emerald-100 border border-emerald-500/30 rounded-tr-none'
+                            : 'bg-slate-800/90 text-slate-200 border border-slate-700/60 rounded-tl-none'
+                        }`}
+                      >
+                        {msg.message && (
+                          <p className="leading-relaxed break-words">{msg.message}</p>
+                        )}
+                        
+                        {msg.mediaUrl && renderMedia(msg)}
+
+                        <div className="flex items-center justify-end gap-1 text-[10px] opacity-60 mt-1.5 font-mono">
+                          <span>{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          {msg.isFromMe && <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+
+              {/* Chat Composer Form */}
+              <div className="p-4 border-t border-slate-800 bg-slate-900/90">
+                {selectedFile && (
+                  <div className="mb-3 p-3 bg-slate-800/90 border border-emerald-500/30 rounded-xl flex items-center justify-between gap-3 animate-in fade-in">
+                    <div className="flex items-center gap-3 overflow-hidden">
+                      {filePreview ? (
+                        <img src={filePreview} alt="Preview" className="w-10 h-10 rounded-lg object-cover" />
+                      ) : (
+                        <div className="p-2 rounded-lg bg-emerald-500/20 text-emerald-400">
+                          <FileIcon className="w-5 h-5" />
+                        </div>
+                      )}
+                      <div className="truncate">
+                        <p className="text-xs font-semibold text-white truncate">{selectedFile.name}</p>
+                        <p className="text-[10px] text-slate-400 font-mono">
+                          {(selectedFile.size / 1024).toFixed(1)} KB
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={clearSelectedFile}
+                      className="p-1 text-slate-400 hover:text-rose-400 rounded-lg"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+
+                <form onSubmit={handleSendMessage} className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileSelect}
+                    className="hidden"
+                    accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx"
+                    disabled={sendLoading}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="p-2.5 text-slate-400 hover:text-emerald-400 hover:bg-slate-800 rounded-xl transition border border-transparent hover:border-slate-700"
+                    title="Attach Media / Document"
+                  >
+                    <Paperclip className="w-5 h-5" />
+                  </button>
+
+                  <input
+                    type="text"
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    placeholder="Type a WhatsApp message..."
+                    className="flex-1 px-4 py-2.5 bg-slate-800/80 border border-slate-700/80 rounded-xl text-white placeholder-slate-500 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 transition"
+                    disabled={sendLoading}
+                  />
+
+                  <button
+                    type="submit"
+                    disabled={sendLoading || (!newMessage.trim() && !selectedFile)}
+                    className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-xl font-bold text-xs shadow-lg shadow-emerald-500/20 transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 cursor-pointer"
+                  >
+                    {sendLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Send className="w-4 h-4" />
+                    )}
+                    <span className="hidden sm:inline">Send</span>
+                  </button>
+                </form>
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full text-center text-slate-500 p-6 space-y-3">
+              <div className="w-16 h-16 rounded-2xl bg-slate-800/80 border border-slate-700/60 flex items-center justify-center text-slate-400">
+                <MessageSquare className="w-8 h-8" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Select a Conversation</h3>
+                <p className="text-xs text-slate-400 mt-1 max-w-xs">
+                  Choose a contact from the left panel to read and reply to WhatsApp messages in real time.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-    );
+    </div>
+  );
 }
