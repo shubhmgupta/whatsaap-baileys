@@ -23,3 +23,4 @@ export async function GET(request: Request) {
   // Otherwise, return incoming messages
   return incomingMessagesGet(request);
 }
+
