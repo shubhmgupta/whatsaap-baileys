@@ -35,7 +35,7 @@ CREATE TABLE `messages` (
 	`user_id` int,
 	`message` text,
 	`sent_at` timestamp DEFAULT (now()),
-	`received_at` timestamp,
+	`received_at` timestamp NULL DEFAULT NULL,
 	CONSTRAINT `messages_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
