@@ -8,7 +8,7 @@ import { Boom } from "@hapi/boom";
 import qrcode from "qrcode";
 import { db } from "@/lib/db";
 import { users, contacts, chatMessages } from "@/db/schema";
-import { eq, and, lt } from "drizzle-orm";
+import { eq, and, lt, or, sql } from "drizzle-orm";
 import pino from "pino";
 import fs from "fs-extra";
 import path from "path";
@@ -69,6 +69,16 @@ export async function uploadBufferToCloudinary(
     console.error("   ❌ Cloudinary uploader threw an error:", err);
     throw err;
   }
+}
+
+// Helper: recursively unwrap ephemeral, viewOnce, and document-wrapped messages
+export function extractActualMessage(msg: any): any {
+  if (!msg) return null;
+  if (msg.ephemeralMessage?.message) return extractActualMessage(msg.ephemeralMessage.message);
+  if (msg.viewOnceMessage?.message) return extractActualMessage(msg.viewOnceMessage.message);
+  if (msg.viewOnceMessageV2?.message) return extractActualMessage(msg.viewOnceMessageV2.message);
+  if (msg.documentWithCaptionMessage?.message) return extractActualMessage(msg.documentWithCaptionMessage.message);
+  return msg;
 }
 
 // Session management - UPDATED with enhanced logging and Status 440 handling
@@ -686,27 +696,31 @@ async function createBaileysSession(userId: string) {
         try {
           const jid = message.key.remoteJid || "";
 
-          // STRICT FILTER: Only process individual chat messages (ending with @s.whatsapp.net)
-          // Skip ALL of these:
-          // - status@broadcast (WhatsApp Status updates)
-          // - @g.us (Group messages)
-          // - @broadcast (Broadcast lists)
-          // - @newsletter (Newsletter/Channel messages)
-          if (!jid.endsWith("@s.whatsapp.net")) {
-            continue;
-          }
-
-          const senderNumber = jid.replace("@s.whatsapp.net", "");
-
-          // Additional safety check: Skip if phone number looks invalid
+          // STRICT FILTER: Skip status broadcasts, groups, broadcast lists, and newsletters
           if (
-            !senderNumber ||
-            senderNumber.includes("@") ||
-            senderNumber.includes("broadcast") ||
-            senderNumber.includes("status")
+            !jid ||
+            jid === "status@broadcast" ||
+            jid.endsWith("@g.us") ||
+            jid.endsWith("@broadcast") ||
+            jid.endsWith("@newsletter")
           ) {
             continue;
           }
+
+          // Must be an individual chat
+          if (!jid.endsWith("@s.whatsapp.net") && !jid.endsWith("@c.us")) {
+            continue;
+          }
+
+          // Strip device suffix if any (e.g. 918210262238:1@s.whatsapp.net -> 918210262238)
+          const cleanJid = jid.split("@")[0].split(":")[0];
+          const senderNumber = cleanJid.replace(/[^0-9]/g, "");
+
+          if (!senderNumber || senderNumber.length < 5) {
+            continue;
+          }
+
+          const last10 = senderNumber.length >= 10 ? senderNumber.slice(-10) : senderNumber;
 
           // Store message in memory for syncing
           const userKey = `${userId}_${senderNumber}`;
@@ -722,32 +736,29 @@ async function createBaileysSession(userId: string) {
             messages.shift();
           }
 
-          // Only save to database if it's an incoming message (not from us)
+          // Only save incoming messages (from other people)
           if (!message.key.fromMe && message.message) {
-            console.log('\n' + '='.repeat(80));
-            console.log('📨 INCOMING MESSAGE RECEIVED');
-            console.log('='.repeat(80));
-            console.log('👤 From:', senderNumber);
-            console.log('🔑 Message Key:', JSON.stringify(message.key, null, 2));
-            console.log('📱 Push Name:', message.pushName);
-            console.log('✅ Verified Biz Name:', message.verifiedBizName);
-            
-            // Safe timestamp parsing
-            const timestamp = message.messageTimestamp 
-              ? (typeof message.messageTimestamp === 'string' 
-                  ? parseInt(message.messageTimestamp) 
-                  : Number(message.messageTimestamp)) * 1000
-              : Date.now();
-            console.log('⏰ Timestamp:', new Date(timestamp).toISOString());
-            
-            console.log('📨 Full Message Object:', JSON.stringify(message.message, null, 2));
-            console.log('='.repeat(80) + '\n');
+            const rawMsg = extractActualMessage(message.message);
+            if (!rawMsg) continue;
+
+            // Skip protocol/reaction messages (e.g. reactions, deletes, ephemeral config)
+            if (rawMsg.protocolMessage || rawMsg.reactionMessage) {
+              continue;
+            }
+
+            console.log("\n" + "=".repeat(80));
+            console.log("📨 INCOMING MESSAGE RECEIVED");
+            console.log("=".repeat(80));
+            console.log("👤 From:", senderNumber);
+            console.log("📱 Push Name:", message.pushName);
+            console.log("=".repeat(80) + "\n");
 
             const messageText =
-              message.message.conversation ||
-              message.message.extendedTextMessage?.text ||
-              message.message.imageMessage?.caption ||
-              message.message.videoMessage?.caption ||
+              rawMsg.conversation ||
+              rawMsg.extendedTextMessage?.text ||
+              rawMsg.imageMessage?.caption ||
+              rawMsg.videoMessage?.caption ||
+              rawMsg.documentMessage?.caption ||
               "";
 
             // Try to get contact name from WhatsApp
@@ -757,264 +768,86 @@ async function createBaileysSession(userId: string) {
               const verifiedName = message.verifiedBizName || null;
               contactName = verifiedName || pushName || senderNumber;
             } catch (error) {
-              console.error("Error getting contact name:", error);
+              // Ignore
             }
 
             // Determine media type and URL from WhatsApp
-            let mediaType = null;
-            let mediaUrl = null;
+            let mediaType: string | null = null;
+            let mediaUrl: string | null = null;
 
-            console.log('\n' + '='.repeat(80));
-            console.log('🔍 CHECKING FOR MEDIA IN MESSAGE');
-            console.log('='.repeat(80));
-            console.log('Has imageMessage?', !!message.message.imageMessage);
-            console.log('Has videoMessage?', !!message.message.videoMessage);
-            console.log('Has audioMessage?', !!message.message.audioMessage);
-            console.log('Has documentMessage?', !!message.message.documentMessage);
-            console.log('='.repeat(80) + '\n');
-
-            if (message.message.imageMessage) {
-              mediaType = message.message.imageMessage.mimetype || "image/jpeg";
-              console.log('📷 IMAGE MESSAGE DETECTED');
-              console.log('   - MIME Type:', mediaType);
-              console.log('   - Caption:', message.message.imageMessage.caption || 'none');
-              console.log('   - Image Message Keys:', Object.keys(message.message.imageMessage));
-              
+            if (rawMsg.imageMessage) {
+              const mime = rawMsg.imageMessage.mimetype || "image/jpeg";
+              mediaType = mime;
               try {
-                console.log('   - Starting download...');
-                // Download the media from WhatsApp using downloadContentFromMessage
-                const stream = await downloadContentFromMessage(message.message.imageMessage, 'image');
-                const chunks = [];
-                
-                console.log('   - Stream created, reading chunks...');
-                for await (const chunk of stream) {
-                  chunks.push(chunk);
-                  console.log('   - Chunk received:', chunk.length, 'bytes');
-                }
-                
+                const stream = await downloadContentFromMessage(rawMsg.imageMessage, "image");
+                const chunks: Buffer[] = [];
+                for await (const chunk of stream) chunks.push(chunk);
                 const buffer = Buffer.concat(chunks);
-                console.log('   - Download complete. Buffer size:', buffer.length, 'bytes');
-                
-                if (buffer.length === 0) {
-                  throw new Error('Downloaded buffer is empty');
+                if (buffer.length > 0 && process.env.CLOUDINARY_API_KEY) {
+                  const ext = mime.split("/")[1] || "jpg";
+                  const fileName = `img_${Date.now()}.${ext}`;
+                  mediaUrl = await uploadBufferToCloudinary(buffer, mime, fileName);
                 }
-                
-                const ext = mediaType.split('/')[1] || 'jpg';
-                const fileName = `image_${Date.now()}.${ext}`;
-                
-                // Cloudinary-only: do NOT save to local filesystem
-                if (process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET && process.env.CLOUDINARY_CLOUD_NAME) {
-                  try {
-                    const secureUrl = await uploadBufferToCloudinary(buffer, mediaType, fileName);
-                    if (secureUrl) {
-                      mediaUrl = secureUrl;
-                      console.log('   🔗 Image uploaded to Cloudinary:', mediaUrl);
-                    } else {
-                      console.error('   ❌ Cloudinary upload did not return secure_url — media will not be saved');
-                      mediaUrl = null;
-                    }
-                  } catch (err) {
-                    console.error('   ❌ Cloudinary upload failed for image:', err);
-                    mediaUrl = null;
-                  }
-                } else {
-                  console.error('   ❌ Cloudinary not configured — refusing to save media locally by policy');
-                  mediaUrl = null;
-                }
-              } catch (error: any) {
-                console.error("   ❌ Error downloading image:");
-                console.error("   - Error type:", error?.constructor?.name);
-                console.error("   - Error message:", error?.message);
-                console.error("   - Full error:", error);
-                mediaUrl = null;
+              } catch (err) {
+                console.error("Error downloading/uploading incoming image:", err);
               }
-            } else if (message.message.videoMessage) {
-              mediaType = message.message.videoMessage.mimetype || "video/mp4";
-              console.log('🎥 VIDEO MESSAGE DETECTED');
-              console.log('   - MIME Type:', mediaType);
-              console.log('   - Caption:', message.message.videoMessage.caption || 'none');
-              
+            } else if (rawMsg.videoMessage) {
+              const mime = rawMsg.videoMessage.mimetype || "video/mp4";
+              mediaType = mime;
               try {
-                console.log('   - Starting download...');
-                const stream = await downloadContentFromMessage(message.message.videoMessage, 'video');
-                const chunks = [];
-                
-                for await (const chunk of stream) {
-                  chunks.push(chunk);
-                }
-                
+                const stream = await downloadContentFromMessage(rawMsg.videoMessage, "video");
+                const chunks: Buffer[] = [];
+                for await (const chunk of stream) chunks.push(chunk);
                 const buffer = Buffer.concat(chunks);
-                console.log('   - Download complete. Buffer size:', buffer.length, 'bytes');
-                
-                const ext = mediaType.split('/')[1] || 'mp4';
-                const fileName = `video_${Date.now()}.${ext}`;
-                
-                // Cloudinary-only: do NOT save to local filesystem
-                if (process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET && process.env.CLOUDINARY_CLOUD_NAME) {
-                  try {
-                    cloudinary.config({
-                      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-                      api_key: process.env.CLOUDINARY_API_KEY,
-                      api_secret: process.env.CLOUDINARY_API_SECRET,
-                    });
-                    const dataUri = `data:${mediaType};base64,${buffer.toString('base64')}`;
-                    const uploadRes = await cloudinary.uploader.upload(dataUri, {
-                      folder: process.env.CLOUDINARY_FOLDER || 'whatsapp-automation',
-                      public_id: path.parse(fileName).name,
-                      resource_type: 'auto',
-                    });
-                    if (uploadRes?.secure_url) {
-                      mediaUrl = uploadRes.secure_url;
-                      console.log('   🔗 Uploaded video to Cloudinary:', mediaUrl);
-                    } else {
-                      console.error('   ❌ Cloudinary upload did not return secure_url — media will not be saved');
-                      mediaUrl = null;
-                    }
-                  } catch (err) {
-                    console.error('   ❌ Cloudinary upload failed for video:', err);
-                    mediaUrl = null;
-                  }
-                } else {
-                  console.error('   ❌ Cloudinary not configured — refusing to save media locally by policy');
-                  mediaUrl = null;
+                if (buffer.length > 0 && process.env.CLOUDINARY_API_KEY) {
+                  const ext = mime.split("/")[1] || "mp4";
+                  const fileName = `vid_${Date.now()}.${ext}`;
+                  mediaUrl = await uploadBufferToCloudinary(buffer, mime, fileName);
                 }
-              } catch (error: any) {
-                console.error("   ❌ Error downloading video:");
-                console.error("   - Error type:", error?.constructor?.name);
-                console.error("   - Error message:", error?.message);
-                console.error("   - Full error:", error);
-                mediaUrl = null;
+              } catch (err) {
+                console.error("Error downloading/uploading incoming video:", err);
               }
-              
-            } else if (message.message.audioMessage) {
-              mediaType = message.message.audioMessage.mimetype || "audio/ogg";
-              console.log('🎵 AUDIO MESSAGE DETECTED');
-              console.log('   - MIME Type:', mediaType);
-              
+            } else if (rawMsg.audioMessage) {
+              const mime = rawMsg.audioMessage.mimetype || "audio/ogg";
+              mediaType = mime;
               try {
-                console.log('   - Starting download...');
-                const stream = await downloadContentFromMessage(message.message.audioMessage, 'audio');
-                const chunks = [];
-                
-                for await (const chunk of stream) {
-                  chunks.push(chunk);
-                }
-                
+                const stream = await downloadContentFromMessage(rawMsg.audioMessage, "audio");
+                const chunks: Buffer[] = [];
+                for await (const chunk of stream) chunks.push(chunk);
                 const buffer = Buffer.concat(chunks);
-                console.log('   - Download complete. Buffer size:', buffer.length, 'bytes');
-                
-                const ext = mediaType.split('/')[1] || 'ogg';
-                const fileName = `audio_${Date.now()}.${ext}`;
-                
-                // Cloudinary-only: do NOT save to local filesystem
-                if (process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET && process.env.CLOUDINARY_CLOUD_NAME) {
-                  try {
-                    cloudinary.config({
-                      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-                      api_key: process.env.CLOUDINARY_API_KEY,
-                      api_secret: process.env.CLOUDINARY_API_SECRET,
-                    });
-                    const dataUri = `data:${mediaType};base64,${buffer.toString('base64')}`;
-                    const uploadRes = await cloudinary.uploader.upload(dataUri, {
-                      folder: process.env.CLOUDINARY_FOLDER || 'whatsapp-automation',
-                      public_id: path.parse(fileName).name,
-                      resource_type: 'auto',
-                    });
-                    if (uploadRes?.secure_url) {
-                      mediaUrl = uploadRes.secure_url;
-                      console.log('   🔗 Uploaded audio to Cloudinary:', mediaUrl);
-                    } else {
-                      console.error('   ❌ Cloudinary upload did not return secure_url — media will not be saved');
-                      mediaUrl = null;
-                    }
-                  } catch (err) {
-                    console.error('   ❌ Cloudinary upload failed for audio:', err);
-                    mediaUrl = null;
-                  }
-                } else {
-                  console.error('   ❌ Cloudinary not configured — refusing to save media locally by policy');
-                  mediaUrl = null;
+                if (buffer.length > 0 && process.env.CLOUDINARY_API_KEY) {
+                  const ext = mime.split("/")[1] || "ogg";
+                  const fileName = `aud_${Date.now()}.${ext}`;
+                  mediaUrl = await uploadBufferToCloudinary(buffer, mime, fileName);
                 }
-              } catch (error: any) {
-                console.error("   ❌ Error downloading audio:");
-                console.error("   - Error type:", error?.constructor?.name);
-                console.error("   - Error message:", error?.message);
-                console.error("   - Full error:", error);
-                mediaUrl = null;
+              } catch (err) {
+                console.error("Error downloading/uploading incoming audio:", err);
               }
-              
-            } else if (message.message.documentMessage) {
-              mediaType = message.message.documentMessage.mimetype || "application/octet-stream";
-              console.log('📄 DOCUMENT MESSAGE DETECTED');
-              console.log('   - MIME Type:', mediaType);
-              console.log('   - File Name:', message.message.documentMessage.fileName || 'none');
-              
+            } else if (rawMsg.documentMessage) {
+              const mime = rawMsg.documentMessage.mimetype || "application/octet-stream";
+              mediaType = mime;
               try {
-                console.log('   - Starting download...');
-                const stream = await downloadContentFromMessage(message.message.documentMessage, 'document');
-                const chunks = [];
-                
-                for await (const chunk of stream) {
-                  chunks.push(chunk);
-                }
-                
+                const stream = await downloadContentFromMessage(rawMsg.documentMessage, "document");
+                const chunks: Buffer[] = [];
+                for await (const chunk of stream) chunks.push(chunk);
                 const buffer = Buffer.concat(chunks);
-                console.log('   - Download complete. Buffer size:', buffer.length, 'bytes');
-                
-                const fileName = message.message.documentMessage.fileName || `document_${Date.now()}`;
-                
-                // Cloudinary-only: do NOT save to local filesystem
-                if (process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET && process.env.CLOUDINARY_CLOUD_NAME) {
-                  try {
-                    cloudinary.config({
-                      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-                      api_key: process.env.CLOUDINARY_API_KEY,
-                      api_secret: process.env.CLOUDINARY_API_SECRET,
-                    });
-                    const dataUri = `data:${mediaType};base64,${buffer.toString('base64')}`;
-                    const uploadRes = await cloudinary.uploader.upload(dataUri, {
-                      folder: process.env.CLOUDINARY_FOLDER || 'whatsapp-automation',
-                      public_id: path.parse(fileName).name,
-                      resource_type: 'auto',
-                    });
-                    if (uploadRes?.secure_url) {
-                      mediaUrl = uploadRes.secure_url;
-                      console.log('   🔗 Uploaded document to Cloudinary:', mediaUrl);
-                    } else {
-                      console.error('   ❌ Cloudinary upload did not return secure_url — media will not be saved');
-                      mediaUrl = null;
-                    }
-                  } catch (err) {
-                    console.error('   ❌ Cloudinary upload failed for document:', err);
-                    mediaUrl = null;
-                  }
-                } else {
-                  console.error('   ❌ Cloudinary not configured — refusing to save media locally by policy');
-                  mediaUrl = null;
+                if (buffer.length > 0 && process.env.CLOUDINARY_API_KEY) {
+                  const fileName = rawMsg.documentMessage.fileName || `doc_${Date.now()}`;
+                  mediaUrl = await uploadBufferToCloudinary(buffer, mime, fileName);
                 }
-              } catch (error: any) {
-                console.error("   ❌ Error downloading document:");
-                console.error("   - Error type:", error?.constructor?.name);
-                console.error("   - Error message:", error?.message);
-                console.error("   - Full error:", error);
-                mediaUrl = null;
+              } catch (err) {
+                console.error("Error downloading/uploading incoming document:", err);
               }
             }
-            
-            if (mediaUrl) {
-              console.log('\n💾 READY TO SAVE TO DATABASE');
-              console.log('   - Media Type:', mediaType);
-              console.log('   - Media URL:', mediaUrl);
-            } else if (mediaType) {
-              console.log('\n⚠️ Media detected but download failed');
-              console.log('   - Media Type:', mediaType);
-            }
 
-            // Get or create contact
+            // Match contact by full number or last 10 digits
             let contact = await db.query.contacts.findFirst({
               where: and(
                 eq(contacts.userId, parseInt(userId)),
-                eq(contacts.phoneNumber, senderNumber)
+                or(
+                  eq(contacts.phoneNumber, senderNumber),
+                  sql`${contacts.phoneNumber} LIKE ${'%' + last10}`
+                )
               ),
             });
 
@@ -1032,48 +865,55 @@ async function createBaileysSession(userId: string) {
                 where: eq(contacts.id, result.id),
               });
             } else {
-              // Update contact name if we got a better one and last message time
+              const updateData: any = { lastMessageAt: new Date() };
+              if (
+                contactName &&
+                contactName !== senderNumber &&
+                (!contact.name || contact.name === contact.phoneNumber)
+              ) {
+                updateData.name = contactName;
+              }
               await db
                 .update(contacts)
-                .set({
-                  name:
-                    contactName !== senderNumber ? contactName : contact.name,
-                  lastMessageAt: new Date(),
-                })
+                .set(updateData)
                 .where(eq(contacts.id, contact.id));
             }
 
             if (!contact) {
               console.error("Could not find or create contact for message");
-              return;
+              continue;
             }
+
+            const finalMessage =
+              messageText ||
+              (mediaType
+                ? rawMsg.imageMessage?.caption ||
+                  rawMsg.videoMessage?.caption ||
+                  rawMsg.documentMessage?.fileName ||
+                  "Media message"
+                : null);
 
             // Save the message
             const messageData = {
               userId: parseInt(userId),
               contactId: contact.id,
-              phoneNumber: senderNumber,
-              message: messageText || (mediaType ? "Media message" : ""),
+              phoneNumber: contact.phoneNumber || senderNumber,
+              message: finalMessage,
               mediaType,
               mediaUrl,
               isFromMe: false,
+              timestamp: new Date(),
             };
-            
-            console.log('\n💾 SAVING MESSAGE TO DATABASE');
-            console.log('   - User ID:', messageData.userId);
-            console.log('   - Contact ID:', messageData.contactId);
-            console.log('   - Phone:', messageData.phoneNumber);
-            console.log('   - Message:', messageData.message);
-            console.log('   - Media Type:', messageData.mediaType);
-            console.log('   - Media URL:', messageData.mediaUrl);
-            
-            const [savedResult] = await db.insert(chatMessages).values(messageData).$returningId();
-            
-            console.log('   ✅ Message saved with ID:', savedResult.id);
-            console.log("📨 Received message from:", senderNumber);
+
+            const [savedResult] = await db
+              .insert(chatMessages)
+              .values(messageData)
+              .$returningId();
+
+            console.log(`✅ Saved incoming message ID ${savedResult.id} from ${senderNumber} (Contact ID: ${contact.id})`);
           }
         } catch (error) {
-          console.error("Error processing message:", error);
+          console.error("Error processing incoming message:", error);
         }
       }
     });

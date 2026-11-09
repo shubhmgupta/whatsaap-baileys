@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { chatMessages } from '@/db/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, or, desc, sql } from 'drizzle-orm';
 
 export async function GET(request: Request) {
   try {
@@ -21,15 +21,22 @@ export async function GET(request: Request) {
       .orderBy(desc(chatMessages.timestamp))
       .limit(limit);
 
-    // Filter by phone number if provided
+    // Filter by phone number if provided (handles with/without country code)
     if (phoneNumber) {
+      const cleanPhone = phoneNumber.replace(/[^0-9]/g, '');
+      const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
+
       query = db
         .select()
         .from(chatMessages)
         .where(
           and(
             eq(chatMessages.userId, parseInt(userId)),
-            eq(chatMessages.phoneNumber, phoneNumber)
+            or(
+              eq(chatMessages.phoneNumber, phoneNumber),
+              eq(chatMessages.phoneNumber, cleanPhone),
+              sql`${chatMessages.phoneNumber} LIKE ${'%' + last10}`
+            )
           )
         )
         .orderBy(desc(chatMessages.timestamp))

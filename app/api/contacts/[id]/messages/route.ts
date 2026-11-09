@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { chatMessages } from '@/db/schema';
-import { eq, and, or, desc } from 'drizzle-orm';
+import { eq, and, or, desc, sql } from 'drizzle-orm';
 
 // Get chat messages for a contact
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -12,14 +12,23 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         const userId = searchParams.get('userId');
         const phoneNumber = searchParams.get('phoneNumber');
 
-        if (!userId || !phoneNumber) {
-            return NextResponse.json({ error: 'User ID and phone number are required' }, { status: 400 });
+        if (!userId) {
+            return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
         }
 
+        const cleanPhone = (phoneNumber || '').replace(/[^0-9]/g, '');
+        const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
+
+        // Query by contactId OR phone number (with or without country code)
         const messages = await db.query.chatMessages.findMany({
             where: and(
                 eq(chatMessages.userId, parseInt(userId)),
-                eq(chatMessages.phoneNumber, phoneNumber)
+                or(
+                    eq(chatMessages.contactId, contactId),
+                    eq(chatMessages.phoneNumber, phoneNumber || ''),
+                    eq(chatMessages.phoneNumber, cleanPhone),
+                    sql`${chatMessages.phoneNumber} LIKE ${'%' + last10}`
+                )
             ),
             orderBy: [desc(chatMessages.timestamp)],
             limit: 100,

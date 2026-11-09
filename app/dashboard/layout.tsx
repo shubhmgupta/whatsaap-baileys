@@ -40,6 +40,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       setCurrentUser(user);
       setIsAdmin(user.role === 'admin');
       setIsAuthenticated(true);
+
+      // Auto-restore WhatsApp session in background across any dashboard page
+      if (user?.id) {
+        fetch('/api/auth/restore', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id }),
+        }).catch(() => {});
+      }
     } catch (error) {
       sessionStorage.removeItem('user');
       window.location.href = '/signin';
