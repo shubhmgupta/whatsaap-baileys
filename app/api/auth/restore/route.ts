@@ -1,10 +1,20 @@
 import { NextResponse } from 'next/server';
-import { tryRestoreFromDatabase } from '@/lib/baileys';
+import { tryRestoreFromDatabase, reconnectSession } from '@/lib/baileys';
 
 export async function POST(request: Request) {
   try {
-    const { userId } = await request.json();
+    const { userId, force } = await request.json();
     if (!userId) return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
+
+    if (force) {
+      console.log(`🔄 Force reconnecting WhatsApp session for user ${userId}...`);
+      const reconnected = await reconnectSession(userId.toString());
+      return NextResponse.json({
+        status: 'reconnected',
+        connected: !!reconnected?.connected,
+        user: reconnected?.user || null,
+      }, { status: 200 });
+    }
 
     const restored = await tryRestoreFromDatabase(userId.toString());
     if (restored) {

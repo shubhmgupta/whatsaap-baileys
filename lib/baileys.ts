@@ -81,6 +81,69 @@ export function extractActualMessage(msg: any): any {
   return msg;
 }
 
+// In-memory cache for WhatsApp LID -> Phone Number mappings
+const lidToPhoneCache = new Map<string, string>();
+
+// Resolve WhatsApp JID (phone number or LID) to clean international phone digits
+export async function resolvePhoneNumber(
+  userId: string,
+  jid: string,
+  participantPn?: string,
+  participant?: string
+): Promise<string> {
+  // 1. If explicit phone number is provided in participantPn (common in Baileys multi-device)
+  if (participantPn) {
+    const clean = participantPn.split("@")[0].split(":")[0].replace(/[^0-9]/g, "");
+    if (clean && clean.length >= 7) return clean;
+  }
+
+  // 2. If participant is a direct phone number
+  if (participant && (participant.endsWith("@s.whatsapp.net") || participant.endsWith("@c.us"))) {
+    const clean = participant.split("@")[0].split(":")[0].replace(/[^0-9]/g, "");
+    if (clean && clean.length >= 7) return clean;
+  }
+
+  // 3. If remoteJid itself is a direct phone number
+  if (jid.endsWith("@s.whatsapp.net") || jid.endsWith("@c.us")) {
+    const clean = jid.split("@")[0].split(":")[0].replace(/[^0-9]/g, "");
+    if (clean && clean.length >= 7) return clean;
+  }
+
+  // 4. If remoteJid is @lid, resolve via cache or matching device registrationId in session files
+  const rawLid = jid.split("@")[0].split(":")[0].replace(/[^0-9]/g, "");
+  if (lidToPhoneCache.has(rawLid)) {
+    return lidToPhoneCache.get(rawLid)!;
+  }
+
+  try {
+    const sessionDir = path.join(process.cwd(), `sessions/user_${userId}`);
+    const lidFile = path.join(sessionDir, `session-${rawLid}.0.json`);
+    if (await fs.pathExists(lidFile)) {
+      const lidData = await fs.readJson(lidFile);
+      const regId = (Object.values(lidData._sessions || {})[0] as any)?.registrationId;
+      if (regId) {
+        const files = await fs.readdir(sessionDir);
+        for (const file of files) {
+          if (!file.startsWith("session-") || file.includes(rawLid) || !file.endsWith(".0.json")) continue;
+          const num = file.replace("session-", "").replace(".0.json", "");
+          if (num.length > 13) continue; // Phone numbers are <= 13 digits, LIDs are 14+ digits
+          const d = await fs.readJson(path.join(sessionDir, file));
+          const r = (Object.values(d._sessions || {})[0] as any)?.registrationId;
+          if (r === regId) {
+            console.log(`🔗 Resolved WhatsApp LID ${rawLid} -> phone number ${num} via registrationId ${regId}`);
+            lidToPhoneCache.set(rawLid, num);
+            return num;
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Error resolving WhatsApp LID to phone number:", err);
+  }
+
+  return rawLid;
+}
+
 // Session management - UPDATED with enhanced logging and Status 440 handling
 // Use globalThis to ensure single instance across all module imports (fixes Next.js module duplication)
 const globalForSessions = globalThis as unknown as {
@@ -690,6 +753,20 @@ async function createBaileysSession(userId: string) {
       }
     });
 
+    // Cache any LID-to-Phone-Number mappings sent by WhatsApp
+    (sock.ev as any).on("lid-mapping.update", (update: any) => {
+      if (update?.mapping) {
+        for (const [lid, pn] of Object.entries(update.mapping)) {
+          const cleanLid = (lid as string).split("@")[0].split(":")[0].replace(/[^0-9]/g, "");
+          const cleanPn = (pn as string).split("@")[0].split(":")[0].replace(/[^0-9]/g, "");
+          if (cleanLid && cleanPn) {
+            lidToPhoneCache.set(cleanLid, cleanPn);
+            console.log(`🔗 Cached WhatsApp LID mapping: ${cleanLid} -> ${cleanPn}`);
+          }
+        }
+      }
+    });
+
     // Listen for incoming messages (ALL messages, both sent and received)
     sock.ev.on("messages.upsert", async (m) => {
       for (const message of m.messages) {
@@ -707,14 +784,18 @@ async function createBaileysSession(userId: string) {
             continue;
           }
 
-          // Must be an individual chat
-          if (!jid.endsWith("@s.whatsapp.net") && !jid.endsWith("@c.us")) {
+          // Must be an individual chat (@s.whatsapp.net, @c.us, or @lid)
+          if (!jid.endsWith("@s.whatsapp.net") && !jid.endsWith("@c.us") && !jid.endsWith("@lid")) {
             continue;
           }
 
-          // Strip device suffix if any (e.g. 918210262238:1@s.whatsapp.net -> 918210262238)
-          const cleanJid = jid.split("@")[0].split(":")[0];
-          const senderNumber = cleanJid.replace(/[^0-9]/g, "");
+          // Resolve phone number from direct JID, participantPn, or LID device registration mapping
+          const senderNumber = await resolvePhoneNumber(
+            userId,
+            jid,
+            (message.key as any)?.participantPn,
+            message.key.participant || undefined
+          );
 
           if (!senderNumber || senderNumber.length < 5) {
             continue;
@@ -1162,6 +1243,25 @@ export async function clearSession(userId: string) {
   keysToDelete.forEach((key) => messageStore.delete(key));
 
   console.log(`✅ Session cleared for user ${userId}`);
+}
+
+export async function reconnectSession(userId: string) {
+  const existing = sessions.get(userId);
+  if (existing?.sock) {
+    try {
+      console.log(`🔄 Force reconnecting WhatsApp socket for user ${userId} to apply updated handlers...`);
+      existing.sock.ev.removeAllListeners("connection.update");
+      existing.sock.ev.removeAllListeners("creds.update");
+      existing.sock.ev.removeAllListeners("messages.upsert");
+      existing.sock.end(new Error("Socket reload requested"));
+    } catch (e) {
+      // Ignore
+    }
+  }
+  sessions.delete(userId);
+  stopHeartbeat(userId);
+  reconnectingUsers.delete(userId);
+  return await createBaileysSession(userId);
 }
 
 export function getStoredMessages(userId: string, phoneNumber: string) {
