@@ -156,7 +156,7 @@ function startHeartbeat(userId: string, sock: any) {
     clearInterval(heartbeatIntervals.get(userId));
   }
 
-  // Send a presence update every 30 seconds to keep connection alive
+  // Send gentle presence update every 3 minutes (180s) to keep presence fresh without spamming
   const interval = setInterval(async () => {
     try {
       if (sock?.user) {
@@ -165,7 +165,7 @@ function startHeartbeat(userId: string, sock: any) {
     } catch (error) {
       // Ignore errors, connection will auto-reconnect if needed
     }
-  }, 30000);
+  }, 180000);
 
   heartbeatIntervals.set(userId, interval);
 }
@@ -317,22 +317,27 @@ export async function tryRestoreFromDatabase(
 
     // If already connected in-memory, return it
     const existing = sessions.get(userId);
-    if (existing?.connected && existing?.sock?.user) return existing;
+    if (existing?.connected && existing?.sock?.user) {
+      console.log(`✅ Session already connected in-memory for user ${userId}`);
+      return existing;
+    }
 
-    // Create socket and attempt connection
-    await createBaileysSession(userId);
+    // If not already connecting, create socket and attempt connection
+    if (!reconnectingUsers.has(userId)) {
+      await createBaileysSession(userId);
+    }
 
-    // Wait up to 10 seconds for connection
+    // Wait up to 15 seconds for connection
     const session = await new Promise<any>((resolve) => {
       let attempts = 0;
       const iv = setInterval(() => {
         const s = sessions.get(userId);
         attempts++;
-        if (s?.connected) {
+        if (s?.connected && s?.sock?.user) {
           clearInterval(iv);
           resolve(s);
-        } else if (attempts >= 20) {
-          // 20 * 500ms = 10s
+        } else if (attempts >= 30) {
+          // 30 * 500ms = 15s
           clearInterval(iv);
           resolve(s || null);
         }
@@ -360,9 +365,22 @@ async function createBaileysSession(userId: string) {
 
   // Check if already connected
   const existingSession = sessions.get(userId);
-  if (existingSession?.sock?.user) {
+  if (existingSession?.sock?.user && existingSession?.connected) {
     console.log("✅ Using existing active session for user:", userId);
     return existingSession;
+  }
+
+  // If a previous socket exists for this user, detach and end it cleanly
+  if (existingSession?.sock) {
+    try {
+      console.log(`🧹 Detaching old socket for user ${userId} before creating new one...`);
+      existingSession.sock.ev.removeAllListeners("connection.update");
+      existingSession.sock.ev.removeAllListeners("creds.update");
+      existingSession.sock.ev.removeAllListeners("messages.upsert");
+      existingSession.sock.end(new Error("Superseded by new session"));
+    } catch (e) {
+      // Ignore
+    }
   }
 
   try {
@@ -448,56 +466,33 @@ async function createBaileysSession(userId: string) {
         stopHeartbeat(userId);
 
         if (shouldReconnect) {
-          // Handle different disconnect reasons
+          // Handle connection replaced / conflict (Status 440 / connectionReplaced)
           if (
             statusCode === DisconnectReason.connectionReplaced ||
-            statusCode === 401 ||
             statusCode === 440
           ) {
             console.log(
-              "⚠️ Connection replaced/conflict (Status 440/401). Invalid credentials - clearing session."
+              `⚠️ Connection replaced / conflict (Status 440) for user ${userId}. Preserving session files and reconnecting...`
             );
 
-            // Clear session completely to force new QR generation
-            sessions.delete(userId);
-            messageStore.delete(userId);
-            qrResolvers.delete(userId);
-
-            stopHeartbeat(userId);
+            // Do NOT delete session files or DB backup! Mark disconnected and re-establish.
+            const current = sessions.get(userId);
+            if (current?.sock === sock) {
+              sessions.set(userId, { ...current, connected: false });
+            }
             reconnectingUsers.delete(userId);
-            reconnectAttempts.delete(userId);
 
-            // Clear session files and database async (non-blocking)
-            (async () => {
-              try {
-                const sessionDir = path.join(
-                  process.cwd(),
-                  `sessions/user_${userId}`
-                );
-                await fs.remove(sessionDir);
-                console.log(`🗑️ Session files deleted for user ${userId}`);
-              } catch (err) {
-                console.error("Failed to remove session directory:", err);
+            // Re-establish connection after brief pause if not already reconnected
+            setTimeout(() => {
+              const latest = sessions.get(userId);
+              if (!latest?.connected && !reconnectingUsers.has(userId)) {
+                console.log(`🔄 Re-establishing WhatsApp socket for user ${userId} after 440...`);
+                createBaileysSession(userId).catch((err) => {
+                  console.error("Error reconnecting session after 440:", err);
+                  reconnectingUsers.delete(userId);
+                });
               }
-
-              try {
-                await db
-                  .update(users)
-                  .set({
-                    whatsappSession: null,
-                  })
-                  .where(eq(users.id, parseInt(userId)));
-                console.log(
-                  `🗑️ Database session backup cleared for user ${userId}`
-                );
-              } catch (error) {
-                console.error("Failed to clear database session:", error);
-              }
-            })();
-
-            console.log(
-              "🧹 Session completely cleared. User must scan new QR code."
-            );
+            }, 3000);
             return;
           }
 
@@ -606,13 +601,20 @@ async function createBaileysSession(userId: string) {
         reconnectAttempts.delete(userId); // Reset reconnection attempts on success
 
         try {
-          // Save minimal session data to database (just auth state, not full session)
-          const sessionData = JSON.stringify(state);
+          const sessionDir = path.join(process.cwd(), `sessions/user_${userId}`);
+          const credsPath = path.join(sessionDir, "creds.json");
+          let sessionData = "";
+          if (await fs.pathExists(credsPath)) {
+            const creds = await fs.readJson(credsPath);
+            sessionData = JSON.stringify({ creds });
+          } else {
+            sessionData = JSON.stringify({ creds: state.creds });
+          }
+
           await db
             .update(users)
             .set({
               whatsappSession: sessionData,
-              // Note: In production, consider using jsonb column for better performance
             })
             .where(eq(users.id, parseInt(userId)));
 
@@ -643,6 +645,7 @@ async function createBaileysSession(userId: string) {
       }
     });
 
+    let credsBackupTimeout: NodeJS.Timeout | null = null;
     sock.ev.on("creds.update", async () => {
       try {
         // Check if session directory still exists before saving
@@ -650,6 +653,24 @@ async function createBaileysSession(userId: string) {
         const exists = await fs.pathExists(sessionDir);
         if (exists) {
           await saveCreds();
+
+          // Debounce database sync so rotated tokens are permanently updated in DB
+          if (credsBackupTimeout) clearTimeout(credsBackupTimeout);
+          credsBackupTimeout = setTimeout(async () => {
+            try {
+              const credsPath = path.join(sessionDir, "creds.json");
+              if (await fs.pathExists(credsPath)) {
+                const creds = await fs.readJson(credsPath);
+                await db
+                  .update(users)
+                  .set({ whatsappSession: JSON.stringify({ creds }) })
+                  .where(eq(users.id, parseInt(userId)));
+                console.log(`💾 Synced rotated credentials to DB for user ${userId}`);
+              }
+            } catch (err) {
+              console.error("Failed to sync rotated credentials to DB:", err);
+            }
+          }, 3000);
         }
       } catch (error) {
         // Ignore ENOENT errors (file doesn't exist) as session may have been cleared
@@ -1150,12 +1171,12 @@ export async function getSession(userId: string, waitForQR: boolean = false) {
             resolve(null);
           }
 
-          // Timeout after 8 seconds (reduced from 15)
-          if (attempts >= 16) {
-            // 16 * 500ms = 8 seconds
+          // Timeout after 20 seconds
+          if (attempts >= 40) {
+            // 40 * 500ms = 20 seconds
             clearInterval(checkConnection);
             console.log(
-              "⏱️ Restoration timeout - assuming credentials invalid"
+              "⏱️ Restoration check completed"
             );
             resolve(session);
           }
