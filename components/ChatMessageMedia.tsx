@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   FileText,
   Download,
@@ -14,7 +14,12 @@ import {
   FileIcon,
   Maximize2,
   X,
-  Loader2
+  Loader2,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  Eye,
+  FileCheck
 } from 'lucide-react';
 
 interface ChatMessageMediaProps {
@@ -30,19 +35,49 @@ export default function ChatMessageMedia({
   caption,
   isFromMe = false,
 }: ChatMessageMediaProps) {
-  const [lightboxOpen, setLightboxOpen] = useState(false);
+  // Image Lightbox state
+  const [imageModalOpen, setImageModalOpen] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(1);
+
+  // PDF Viewer Modal state
+  const [pdfModalOpen, setPdfModalOpen] = useState(false);
+  const [pdfUseGoogleViewer, setPdfUseGoogleViewer] = useState(false);
+
+  // Audio Player state
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [isDownloading, setIsDownloading] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // General state
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [thumbError, setThumbError] = useState(false);
+
+  // Close modals on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setImageModalOpen(false);
+        setPdfModalOpen(false);
+        setZoomLevel(1);
+      }
+    };
+    if (imageModalOpen || pdfModalOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = 'hidden';
+    }
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = '';
+    };
+  }, [imageModalOpen, pdfModalOpen]);
 
   if (!mediaUrl) return null;
 
   const urlLower = mediaUrl.toLowerCase();
   const typeLower = (mediaType || '').toLowerCase();
 
-  // Determine media category
+  // Media category detection
   const isImage =
     typeLower.includes('image') ||
     /\.(jpg|jpeg|png|webp|gif|svg|bmp)(\?.*)?$/i.test(urlLower);
@@ -60,23 +95,34 @@ export default function ChatMessageMedia({
   const isArchive = /\.(zip|rar|7z|tar|gz)(\?.*)?$/i.test(urlLower);
   const isCode = /\.(json|js|ts|html|css|xml)(\?.*)?$/i.test(urlLower);
 
-  // Clean filename extraction from URL
+  // Clean filename extraction
   const extractFileName = (url: string) => {
     try {
       const parts = url.split('/');
       const last = parts[parts.length - 1].split('?')[0];
-      // Remove leading epoch timestamps if any (e.g. 1794217685283_file.png -> file.png)
       return decodeURIComponent(last).replace(/^\d{10,14}_/, '');
     } catch {
-      return 'downloaded_file';
+      return 'document';
     }
   };
 
   const fileName = extractFileName(mediaUrl);
 
-  // Direct download helper
-  const handleDownload = async (e: React.MouseEvent) => {
-    e.stopPropagation();
+  // Generate first-page thumbnail URL for Cloudinary PDFs
+  const getPdfThumbnailUrl = (url: string) => {
+    if (url.includes('cloudinary.com') && url.includes('/upload/')) {
+      return url
+        .replace(/\/upload\/(v\d+\/)?/, '/upload/pg_1,w_600,f_auto,q_auto/$1')
+        .replace(/\.pdf(\?.*)?$/i, '.jpg');
+    }
+    return null;
+  };
+
+  const pdfThumbUrl = isPdf ? getPdfThumbnailUrl(mediaUrl) : null;
+
+  // Direct download trigger
+  const handleDownload = async (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     try {
       setIsDownloading(true);
       const res = await fetch(mediaUrl);
@@ -96,7 +142,7 @@ export default function ChatMessageMedia({
     }
   };
 
-  // Audio player controls
+  // Audio controls
   const togglePlayAudio = () => {
     if (!audioRef.current) return;
     if (isPlaying) {
@@ -115,39 +161,50 @@ export default function ChatMessageMedia({
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
-  // 1. IMAGE MEDIA
+  // ==========================================
+  // 1. IMAGE RENDERING & UNIVERSAL LIGHTBOX
+  // ==========================================
   if (isImage) {
     return (
       <div className="w-full">
-        <div className="relative group overflow-hidden rounded-2xl border border-white/10 bg-black/20 shadow-lg transition-all duration-200 hover:border-emerald-500/30">
+        {/* Chat Bubble Image Preview (Maintains true aspect ratio without distortion) */}
+        <div
+          onClick={() => {
+            setImageModalOpen(true);
+            setZoomLevel(1);
+          }}
+          className="relative group overflow-hidden rounded-2xl border border-white/10 bg-black/30 cursor-pointer shadow-md hover:border-emerald-500/40 transition-all duration-200 max-w-full sm:max-w-sm md:max-w-md"
+        >
           <img
             src={mediaUrl}
             alt={caption || 'WhatsApp Photo'}
             loading="lazy"
-            className="w-full h-auto max-h-80 sm:max-h-96 object-cover cursor-pointer transition-transform duration-300 group-hover:scale-[1.01]"
-            onClick={() => setLightboxOpen(true)}
+            className="w-full h-auto max-h-[360px] object-contain rounded-2xl transition-transform duration-300 group-hover:scale-[1.01]"
           />
 
-          {/* Quick Overlay Action Bar */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-end justify-between p-3">
-            <span className="text-[11px] font-mono text-slate-300 truncate max-w-[65%]">
+          {/* Quick Overlay Bar */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-end justify-between p-3 pointer-events-none">
+            <span className="text-[11px] font-mono text-slate-200 truncate max-w-[65%]">
               {fileName}
             </span>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 pointer-events-auto">
               <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setLightboxOpen(true);
+                  setImageModalOpen(true);
+                  setZoomLevel(1);
                 }}
-                className="p-1.5 rounded-lg bg-black/60 hover:bg-black/90 text-white backdrop-blur transition"
+                className="p-1.5 rounded-lg bg-black/70 hover:bg-black/90 text-white backdrop-blur transition shadow"
                 title="View Fullscreen"
               >
                 <Maximize2 className="w-3.5 h-3.5" />
               </button>
               <button
+                type="button"
                 onClick={handleDownload}
                 disabled={isDownloading}
-                className="p-1.5 rounded-lg bg-black/60 hover:bg-black/90 text-white backdrop-blur transition"
+                className="p-1.5 rounded-lg bg-black/70 hover:bg-black/90 text-white backdrop-blur transition shadow"
                 title="Download Photo"
               >
                 {isDownloading ? (
@@ -160,59 +217,313 @@ export default function ChatMessageMedia({
           </div>
         </div>
 
-        {/* Fullscreen Lightbox Modal */}
-        {lightboxOpen && (
+        {/* Universal Aspect Ratio Lightbox Modal */}
+        {imageModalOpen && (
           <div
-            className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4"
-            onClick={() => setLightboxOpen(false)}
+            className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex flex-col animate-in fade-in duration-200"
+            onClick={() => {
+              setImageModalOpen(false);
+              setZoomLevel(1);
+            }}
           >
+            {/* Top Fixed Control Bar - Always visible regardless of image aspect ratio */}
             <div
-              className="relative max-w-5xl max-h-[90vh] flex flex-col items-center"
+              className="sticky top-0 inset-x-0 z-[110] px-4 py-3.5 bg-slate-950/80 backdrop-blur-xl border-b border-white/10 flex items-center justify-between shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Lightbox Controls */}
-              <div className="w-full flex items-center justify-between pb-3 text-white">
-                <span className="text-xs font-mono text-slate-300 truncate max-w-md">
+              <div className="flex items-center gap-2.5 min-w-0 pr-4">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" />
+                <span className="text-xs sm:text-sm font-mono font-medium text-slate-200 truncate max-w-xs sm:max-w-md">
                   {fileName}
                 </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleDownload}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-white transition"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>Download</span>
-                  </button>
-                  <a
-                    href={mediaUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white transition"
-                    title="Open original tab"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                  </a>
-                  <button
-                    onClick={() => setLightboxOpen(false)}
-                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-600 text-white transition"
-                    title="Close"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                {/* Zoom Out */}
+                <button
+                  type="button"
+                  onClick={() => setZoomLevel((z) => Math.max(0.6, Number((z - 0.25).toFixed(2))))}
+                  className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 hover:text-white transition"
+                  title="Zoom Out"
+                >
+                  <ZoomOut className="w-4 h-4" />
+                </button>
+
+                {/* Reset Zoom Indicator */}
+                <button
+                  type="button"
+                  onClick={() => setZoomLevel(1)}
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-xs font-mono text-emerald-400 font-semibold transition"
+                  title="Reset Zoom"
+                >
+                  {Math.round(zoomLevel * 100)}%
+                </button>
+
+                {/* Zoom In */}
+                <button
+                  type="button"
+                  onClick={() => setZoomLevel((z) => Math.min(3, Number((z + 0.25).toFixed(2))))}
+                  className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 hover:text-white transition"
+                  title="Zoom In"
+                >
+                  <ZoomIn className="w-4 h-4" />
+                </button>
+
+                {/* Download */}
+                <button
+                  type="button"
+                  onClick={handleDownload}
+                  disabled={isDownloading}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold text-white transition shadow-sm shadow-emerald-500/20"
+                  title="Download Image"
+                >
+                  {isDownloading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4" />
+                  )}
+                  <span className="hidden sm:inline">Save</span>
+                </button>
+
+                {/* Open External */}
+                <a
+                  href={mediaUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 hover:text-white transition"
+                  title="Open Original in New Tab"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+
+                {/* Close Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setImageModalOpen(false);
+                    setZoomLevel(1);
+                  }}
+                  className="p-2 rounded-xl bg-rose-500/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 transition ml-1"
+                  title="Close (Esc)"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Central Viewport - Accommodates ANY ratio (vertical, landscape, ultra-wide) */}
+            <div className="flex-1 overflow-auto flex items-center justify-center p-4 sm:p-6 w-full h-full select-none">
+              <div
+                className="transition-transform duration-200 ease-out flex items-center justify-center"
+                style={{ transform: `scale(${zoomLevel})` }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // Toggle zoom on image click
+                  setZoomLevel((z) => (z === 1 ? 1.75 : 1));
+                }}
+              >
+                <img
+                  src={mediaUrl}
+                  alt={caption || 'Full view'}
+                  className="max-h-[82vh] max-w-[92vw] w-auto h-auto object-contain rounded-xl shadow-2xl cursor-zoom-in"
+                />
+              </div>
+            </div>
+
+            {/* Caption bar if present */}
+            {caption && caption !== 'Media message' && (
+              <div
+                className="sticky bottom-0 inset-x-0 p-3 bg-slate-950/90 border-t border-white/10 text-center"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <p className="text-xs sm:text-sm text-slate-200 max-w-2xl mx-auto font-medium">
+                  {caption}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ==========================================
+  // 2. PDF VIEWER & WHATSAPP-STYLE THUMBNAIL
+  // ==========================================
+  if (isPdf) {
+    return (
+      <div className="w-full">
+        {/* WhatsApp-Style PDF Card with First-Page Thumbnail */}
+        <div
+          onClick={() => setPdfModalOpen(true)}
+          className="relative group overflow-hidden rounded-2xl border border-rose-500/30 bg-gradient-to-b from-slate-900/90 via-slate-900/70 to-slate-950/90 hover:border-rose-500/60 transition-all duration-200 cursor-pointer shadow-lg max-w-full sm:max-w-sm md:max-w-md"
+        >
+          {/* First Page Preview Thumbnail if available */}
+          {pdfThumbUrl && !thumbError ? (
+            <div className="relative w-full h-44 sm:h-52 bg-slate-950/60 overflow-hidden border-b border-white/10">
+              <img
+                src={pdfThumbUrl}
+                alt="PDF First Page Preview"
+                onError={() => setThumbError(true)}
+                className="w-full h-full object-cover object-top transition-transform duration-300 group-hover:scale-[1.02] opacity-90 group-hover:opacity-100"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent" />
+              <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-rose-600/90 text-white text-[10px] font-bold uppercase tracking-wider shadow">
+                <FileText className="w-3 h-3" />
+                <span>PDF Document</span>
+              </div>
+              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-black/40 backdrop-blur-[2px]">
+                <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-rose-600 text-white text-xs font-semibold shadow-lg">
+                  <Eye className="w-4 h-4" />
+                  <span>Click to Read PDF</span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="p-4 bg-rose-500/10 border-b border-rose-500/20 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center justify-center flex-shrink-0">
+                <FileText className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider px-1.5 py-0.5 rounded bg-rose-500/20 border border-rose-500/30">
+                  PDF
+                </span>
+                <p className="text-xs font-mono text-slate-400 mt-1">Multi-page Document</p>
+              </div>
+            </div>
+          )}
+
+          {/* Bottom Document Info & Actions */}
+          <div className="p-3.5 flex items-center justify-between gap-3 bg-slate-900/90">
+            <div className="min-w-0 truncate">
+              <p className="text-xs font-semibold text-white truncate group-hover:text-rose-300 transition">
+                {fileName}
+              </p>
+              <p className="text-[10px] text-slate-400 font-mono mt-0.5 flex items-center gap-1">
+                <span>Click to open in PDF Viewer</span>
+              </p>
+            </div>
+
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPdfModalOpen(true);
+                }}
+                className="p-2 rounded-xl bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white transition"
+                title="Read PDF"
+              >
+                <Eye className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={handleDownload}
+                disabled={isDownloading}
+                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
+                title="Download PDF"
+              >
+                {isDownloading ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
+                ) : (
+                  <Download className="w-4 h-4" />
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Embedded Full PDF Viewer Modal */}
+        {pdfModalOpen && (
+          <div
+            className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex flex-col animate-in fade-in duration-200"
+            onClick={() => setPdfModalOpen(false)}
+          >
+            {/* Top Fixed Header with Controls */}
+            <div
+              className="sticky top-0 inset-x-0 z-[110] px-4 py-3 bg-slate-950/90 backdrop-blur-xl border-b border-white/10 flex items-center justify-between shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-2.5 min-w-0 pr-4">
+                <div className="p-1.5 rounded-lg bg-rose-600/20 text-rose-400 border border-rose-500/30">
+                  <FileText className="w-4 h-4" />
+                </div>
+                <div className="truncate">
+                  <h3 className="text-xs sm:text-sm font-semibold text-white truncate max-w-xs sm:max-w-md">
+                    {fileName}
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-mono">Interactive PDF Reader</p>
                 </div>
               </div>
 
-              {/* Lightbox Image */}
-              <img
-                src={mediaUrl}
-                alt={caption || 'Preview'}
-                className="max-h-[80vh] w-auto max-w-full rounded-xl object-contain shadow-2xl"
-              />
-              {caption && caption !== 'Media message' && (
-                <p className="mt-3 text-sm text-slate-200 text-center bg-black/60 px-4 py-2 rounded-xl backdrop-blur max-w-xl">
-                  {caption}
-                </p>
-              )}
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {/* Fallback to Google Docs Viewer if direct iframe fails */}
+                <button
+                  type="button"
+                  onClick={() => setPdfUseGoogleViewer((prev) => !prev)}
+                  className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 hover:text-white transition"
+                  title="Switch PDF rendering mode"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>{pdfUseGoogleViewer ? 'Native Viewer' : 'Google Docs Engine'}</span>
+                </button>
+
+                {/* Direct Download */}
+                <button
+                  type="button"
+                  onClick={handleDownload}
+                  disabled={isDownloading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-xs font-semibold text-white transition shadow-sm shadow-rose-600/20"
+                >
+                  {isDownloading ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Download className="w-3.5 h-3.5" />
+                  )}
+                  <span className="hidden sm:inline">Download</span>
+                </button>
+
+                {/* Open in New Tab */}
+                <a
+                  href={mediaUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
+                  title="Open Original"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+
+                {/* Close Button */}
+                <button
+                  type="button"
+                  onClick={() => setPdfModalOpen(false)}
+                  className="p-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 transition ml-1"
+                  title="Close (Esc)"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Main Interactive PDF Frame Viewport */}
+            <div
+              className="flex-1 w-full h-full p-2 sm:p-4 overflow-hidden flex items-center justify-center"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="w-full h-full max-w-6xl bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-2xl relative">
+                <iframe
+                  src={
+                    pdfUseGoogleViewer
+                      ? `https://docs.google.com/viewer?url=${encodeURIComponent(mediaUrl)}&embedded=true`
+                      : `${mediaUrl}#toolbar=1`
+                  }
+                  className="w-full h-full border-0 bg-white"
+                  title={fileName}
+                />
+              </div>
             </div>
           </div>
         )}
@@ -220,11 +531,13 @@ export default function ChatMessageMedia({
     );
   }
 
-  // 2. VIDEO MEDIA
+  // ==========================================
+  // 3. VIDEO MEDIA
+  // ==========================================
   if (isVideo) {
     return (
       <div className="w-full">
-        <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/40 shadow-lg">
+        <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/40 shadow-lg max-w-full sm:max-w-sm md:max-w-md">
           <video
             src={mediaUrl}
             controls
@@ -237,6 +550,7 @@ export default function ChatMessageMedia({
               {fileName}
             </span>
             <button
+              type="button"
               onClick={handleDownload}
               className="flex items-center gap-1 text-[11px] text-emerald-400 hover:text-emerald-300 font-medium transition"
             >
@@ -249,7 +563,9 @@ export default function ChatMessageMedia({
     );
   }
 
-  // 3. AUDIO / VOICE NOTE
+  // ==========================================
+  // 4. AUDIO / VOICE NOTES
+  // ==========================================
   if (isAudio) {
     return (
       <div className="w-full min-w-[240px] sm:min-w-[280px]">
@@ -266,7 +582,7 @@ export default function ChatMessageMedia({
           className="hidden"
         />
         <div className="p-3 rounded-2xl bg-black/30 border border-white/10 backdrop-blur-md flex items-center gap-3 shadow-md">
-          {/* Play/Pause Button */}
+          {/* Circular Play/Pause Button */}
           <button
             type="button"
             onClick={togglePlayAudio}
@@ -283,7 +599,7 @@ export default function ChatMessageMedia({
             )}
           </button>
 
-          {/* Audio Waveform / Scrubber */}
+          {/* Scrubber & Duration */}
           <div className="flex-1 min-w-0 space-y-1.5">
             <input
               type="range"
@@ -308,6 +624,7 @@ export default function ChatMessageMedia({
 
           {/* Quick Download */}
           <button
+            type="button"
             onClick={handleDownload}
             className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-white/5 transition"
             title="Download Audio"
@@ -319,15 +636,14 @@ export default function ChatMessageMedia({
     );
   }
 
-  // 4. DOCUMENTS & ATTACHMENTS (PDF, Word, Excel, Zip, etc.)
+  // ==========================================
+  // 5. OTHER DOCUMENTS (Word, Excel, Zip, etc.)
+  // ==========================================
   let badgeColor = 'bg-blue-500/20 text-blue-400 border-blue-500/30';
   let badgeText = 'FILE';
   let IconComponent = FileText;
 
-  if (isPdf) {
-    badgeColor = 'bg-rose-500/20 text-rose-400 border-rose-500/30';
-    badgeText = 'PDF';
-  } else if (isSheet) {
+  if (isSheet) {
     badgeColor = 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
     badgeText = 'EXCEL';
     IconComponent = FileSpreadsheet;
@@ -356,7 +672,7 @@ export default function ChatMessageMedia({
               <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${badgeColor}`}>
                 {badgeText}
               </span>
-              <span className="text-[10px] text-slate-400 font-mono">Document</span>
+              <span className="text-[10px] text-slate-400 font-mono">Attachment</span>
             </div>
           </div>
         </div>
@@ -372,6 +688,7 @@ export default function ChatMessageMedia({
             <ExternalLink className="w-4 h-4" />
           </a>
           <button
+            type="button"
             onClick={handleDownload}
             disabled={isDownloading}
             className="p-2 text-slate-400 hover:text-emerald-400 rounded-lg hover:bg-white/10 transition"
@@ -388,4 +705,3 @@ export default function ChatMessageMedia({
     </div>
   );
 }
-
