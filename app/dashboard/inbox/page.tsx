@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { 
   ArrowLeft, 
+  ArrowDown,
   Send, 
   Phone, 
   Loader2, 
@@ -70,8 +71,13 @@ export default function InboxPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const [showChat, setShowChat] = useState(false);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const userScrolledUpRef = useRef(false);
+  const isInitialLoadRef = useRef(true);
+  const justSentRef = useRef(false);
 
   useEffect(() => {
     const userData = sessionStorage.getItem('user');
@@ -91,6 +97,11 @@ export default function InboxPage() {
   useEffect(() => {
     if (selectedContact && user) {
       setShowChat(true);
+      // Reset scroll tracking flags when switching contact
+      isInitialLoadRef.current = true;
+      userScrolledUpRef.current = false;
+      setShowScrollBottom(false);
+
       loadMessages(selectedContact.id, selectedContact.phoneNumber);
       
       // Auto-refresh messages every 3 seconds for active conversation
@@ -102,11 +113,42 @@ export default function InboxPage() {
   }, [selectedContact, user]);
 
   useEffect(() => {
-    scrollToBottom();
+    // Initial contact open or when message was just sent: scroll immediately to bottom
+    if (isInitialLoadRef.current || justSentRef.current) {
+      scrollToBottom('auto');
+      isInitialLoadRef.current = false;
+      justSentRef.current = false;
+      return;
+    }
+
+    // On background polling/inbound message:
+    // ONLY scroll down if the user is already at the bottom.
+    // If the user scrolled up to read earlier messages, do NOT yank them down!
+    if (!userScrolledUpRef.current) {
+      scrollToBottom('smooth');
+    }
   }, [messages]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior,
+      });
+    } else {
+      messagesEndRef.current?.scrollIntoView({ behavior });
+    }
+  };
+
+  const handleChatScroll = () => {
+    const el = chatContainerRef.current;
+    if (!el) return;
+    // Check how many pixels the user is from the bottom
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    // If user is more than 90px away from bottom, they are viewing earlier messages
+    const isScrolledUp = distanceFromBottom > 90;
+    userScrolledUpRef.current = isScrolledUp;
+    setShowScrollBottom(isScrolledUp);
   };
 
   const loadContacts = async (userId: number, showSpinner: boolean = true) => {
@@ -130,7 +172,17 @@ export default function InboxPage() {
       const res = await fetch(`/api/contacts/${contactId}/messages?userId=${user.id}&phoneNumber=${phoneNumber}`);
       if (res.ok) {
         const data = await res.json();
-        setMessages(data.messages || []);
+        const incoming: Message[] = data.messages || [];
+        setMessages((prev) => {
+          // Compare length and last message ID to avoid unnecessary state changes/re-renders
+          if (
+            prev.length === incoming.length &&
+            (prev.length === 0 || prev[prev.length - 1].id === incoming[incoming.length - 1].id)
+          ) {
+            return prev;
+          }
+          return incoming;
+        });
       }
     } catch (error) {
       console.error('Failed to load messages:', error);
@@ -181,7 +233,11 @@ export default function InboxPage() {
         if (res.ok) {
           setNewMessage('');
           clearSelectedFile();
+          justSentRef.current = true;
+          userScrolledUpRef.current = false;
+          setShowScrollBottom(false);
           await loadMessages(selectedContact.id, selectedContact.phoneNumber);
+          scrollToBottom('smooth');
         } else {
           const data = await res.json();
           alert(data.error || 'Failed to dispatch message');
@@ -200,7 +256,11 @@ export default function InboxPage() {
 
         if (res.ok) {
           setNewMessage('');
+          justSentRef.current = true;
+          userScrolledUpRef.current = false;
+          setShowScrollBottom(false);
           await loadMessages(selectedContact.id, selectedContact.phoneNumber);
+          scrollToBottom('smooth');
         } else {
           const data = await res.json();
           alert(data.error || 'Failed to dispatch message');
@@ -400,7 +460,11 @@ export default function InboxPage() {
               </div>
 
               {/* Chat Timeline */}
-              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3.5">
+              <div
+                ref={chatContainerRef}
+                onScroll={handleChatScroll}
+                className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3.5 relative scroll-smooth"
+              >
                 {messages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-center text-slate-500 space-y-2">
                     <MessageSquare className="w-10 h-10 opacity-30" />
@@ -435,6 +499,25 @@ export default function InboxPage() {
                   ))
                 )}
                 <div ref={messagesEndRef} />
+
+                {/* Floating "Scroll to Bottom / Latest Messages" button */}
+                {showScrollBottom && (
+                  <div className="sticky bottom-2 flex justify-end pointer-events-none pr-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        userScrolledUpRef.current = false;
+                        setShowScrollBottom(false);
+                        scrollToBottom('smooth');
+                      }}
+                      className="pointer-events-auto flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-slate-900/95 hover:bg-slate-800 text-emerald-400 border border-emerald-500/40 text-xs font-semibold shadow-2xl backdrop-blur transition-all duration-200 animate-in fade-in slide-in-from-bottom-2 hover:scale-105"
+                      title="Jump to latest messages"
+                    >
+                      <ArrowDown className="w-3.5 h-3.5 animate-bounce" />
+                      <span>Latest messages</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Chat Composer Form */}

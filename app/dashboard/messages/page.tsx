@@ -65,6 +65,7 @@ export default function MessagesDashboard() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
+  const chatTimelineRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const userData = sessionStorage.getItem('user');
@@ -113,7 +114,12 @@ export default function MessagesDashboard() {
 
   useEffect(() => {
     if (chatMessages.length > 0) {
-      chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      if (chatTimelineRef.current) {
+        chatTimelineRef.current.scrollTo({
+          top: chatTimelineRef.current.scrollHeight,
+          behavior: 'smooth',
+        });
+      }
     }
   }, [chatMessages]);
 
@@ -1007,7 +1013,7 @@ export default function MessagesDashboard() {
               </div>
 
               {/* Message timeline */}
-              <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+              <div ref={chatTimelineRef} className="space-y-3 max-h-80 overflow-y-auto pr-1 scroll-smooth">
                 {chatMessages.length === 0 ? (
                   <div className="text-center py-8 text-slate-500 text-xs">
                     No message history recorded with this contact yet.
