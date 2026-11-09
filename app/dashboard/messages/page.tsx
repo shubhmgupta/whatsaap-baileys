@@ -32,6 +32,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import Link from 'next/link';
+import ChatMessageMedia from '@/components/ChatMessageMedia';
 
 export default function MessagesDashboard() {
   const [user, setUser] = useState<any>(null);
@@ -1024,18 +1025,17 @@ export default function MessagesDashboard() {
                             : 'bg-slate-800/90 text-slate-200 border border-slate-700/60 rounded-tl-none'
                         }`}
                       >
-                        {msg.message && <p className="leading-relaxed">{msg.message}</p>}
+                        {msg.message && msg.message !== 'Media message' && (
+                          <p className="leading-relaxed mb-2">{msg.message}</p>
+                        )}
                         {msg.mediaUrl && (
-                          <div className="mt-2 pt-2 border-t border-white/10 flex items-center gap-2 text-xs text-emerald-300">
-                            <FileIcon className="w-3.5 h-3.5 flex-shrink-0" />
-                            <a
-                              href={msg.mediaUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="truncate underline hover:text-white"
-                            >
-                              View Attached Media
-                            </a>
+                          <div className="mt-1">
+                            <ChatMessageMedia
+                              mediaUrl={msg.mediaUrl}
+                              mediaType={msg.mediaType}
+                              caption={msg.message}
+                              isFromMe={msg.isFromMe}
+                            />
                           </div>
                         )}
                         <p className="text-[10px] text-right mt-1 opacity-60">

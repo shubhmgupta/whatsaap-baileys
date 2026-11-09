@@ -24,6 +24,7 @@ import {
   CheckCheck
 } from 'lucide-react';
 import Link from 'next/link';
+import ChatMessageMedia from '@/components/ChatMessageMedia';
 
 interface Contact {
   id: number;
@@ -215,85 +216,15 @@ export default function InboxPage() {
 
   const renderMedia = (msg: Message) => {
     if (!msg.mediaUrl) return null;
-    const mediaType = msg.mediaType?.toLowerCase() || '';
-
-    // Image preview
-    if (mediaType.includes('image') || /\.(jpg|jpeg|png|gif|webp)$/i.test(msg.mediaUrl)) {
-      return (
-        <div className="mt-2 space-y-2">
-          <div className="relative group overflow-hidden rounded-xl border border-white/10 max-w-xs">
-            <img
-              src={msg.mediaUrl}
-              alt="Shared media"
-              className="max-h-64 w-full object-cover cursor-pointer hover:scale-[1.02] transition duration-200"
-              onClick={() => window.open(msg.mediaUrl!, '_blank')}
-            />
-            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2">
-              <a
-                href={msg.mediaUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-2 rounded-lg bg-black/70 hover:bg-black/90 text-white text-xs flex items-center gap-1"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                <span>View Full</span>
-              </a>
-              <a
-                href={msg.mediaUrl}
-                download
-                className="p-2 rounded-lg bg-emerald-600/80 hover:bg-emerald-600 text-white text-xs flex items-center gap-1"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Save</span>
-              </a>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    // Video preview
-    if (mediaType.includes('video') || /\.(mp4|webm|ogg|mov)$/i.test(msg.mediaUrl)) {
-      return (
-        <div className="mt-2 space-y-2 max-w-sm">
-          <video
-            src={msg.mediaUrl}
-            controls
-            className="w-full rounded-xl border border-white/10 max-h-72"
-          />
-        </div>
-      );
-    }
-
-    // Audio preview
-    if (mediaType.includes('audio') || /\.(mp3|wav|ogg|m4a)$/i.test(msg.mediaUrl)) {
-      return (
-        <div className="mt-2">
-          <audio src={msg.mediaUrl} controls className="w-full min-w-[220px]" />
-        </div>
-      );
-    }
-
-    // Document / PDF
     return (
-      <a
-        href={msg.mediaUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        download
-        className="mt-2 flex items-center gap-2.5 p-3 rounded-xl bg-black/30 hover:bg-black/40 border border-white/10 transition text-xs group"
-      >
-        <div className="p-2 rounded-lg bg-emerald-500/20 text-emerald-400 group-hover:bg-emerald-500 group-hover:text-black transition">
-          <FileText className="w-4 h-4" />
-        </div>
-        <div className="flex-1 truncate">
-          <p className="font-semibold text-white truncate">Attached Document</p>
-          <p className="text-[10px] text-slate-400 uppercase tracking-wider">{msg.mediaType || 'File'}</p>
-        </div>
-        <Download className="w-4 h-4 text-slate-400 group-hover:text-white transition" />
-      </a>
+      <div className="mt-2">
+        <ChatMessageMedia
+          mediaUrl={msg.mediaUrl}
+          mediaType={msg.mediaType}
+          caption={msg.message}
+          isFromMe={msg.isFromMe}
+        />
+      </div>
     );
   };
 
@@ -489,7 +420,7 @@ export default function InboxPage() {
                             : 'bg-slate-800/90 text-slate-200 border border-slate-700/60 rounded-tl-none'
                         }`}
                       >
-                        {msg.message && (
+                        {msg.message && msg.message !== 'Media message' && (
                           <p className="leading-relaxed break-words">{msg.message}</p>
                         )}
                         

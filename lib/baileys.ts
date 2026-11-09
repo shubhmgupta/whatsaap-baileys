@@ -977,12 +977,10 @@ async function createBaileysSession(userId: string) {
 
             const finalMessage =
               messageText ||
-              (mediaType
-                ? rawMsg.imageMessage?.caption ||
-                  rawMsg.videoMessage?.caption ||
-                  rawMsg.documentMessage?.fileName ||
-                  "Media message"
-                : null);
+              rawMsg.imageMessage?.caption ||
+              rawMsg.videoMessage?.caption ||
+              rawMsg.documentMessage?.caption ||
+              null;
 
             // Save the message
             const messageData = {
