@@ -14,7 +14,7 @@ export async function OPTIONS() {
     return NextResponse.json({}, { headers: corsHeaders });
 }
 
-// Get chat messages for a contact
+// Get message history with a specific contact (by phone number)
 export async function GET(request: Request) {
     try {
         // Get API token from Authorization header
@@ -37,16 +37,17 @@ export async function GET(request: Request) {
 
         const userId = user.id;
 
-        const { searchParams } = new URL(request.url);
-        const phoneNumber = searchParams.get('phoneNumber');
+        // Get phone number from query params
+        const url = new URL(request.url);
+        const phoneNumber = url.searchParams.get('phoneNumber');
 
         if (!phoneNumber) {
             return NextResponse.json({
-                error: 'Phone number is required'
+                error: 'Phone number is required. Usage: /api/v1/contacts/messages?phoneNumber=1234567890'
             }, { status: 400, headers: corsHeaders });
         }
 
-        // Get or create contact for this phone number
+        // Find or create contact
         let contact = await db.query.contacts.findFirst({
             where: and(
                 eq(contacts.userId, userId),
@@ -68,7 +69,7 @@ export async function GET(request: Request) {
 
         if (!contact) {
             return NextResponse.json({
-                error: 'Failed to create contact'
+                error: 'Failed to find or create contact'
             }, { status: 500, headers: corsHeaders });
         }
 
@@ -149,7 +150,7 @@ export async function POST(request: Request) {
 
         if (!contact) {
             return NextResponse.json({
-                error: 'Failed to create contact'
+                error: 'Failed to find or create contact'
             }, { status: 500, headers: corsHeaders });
         }
 
