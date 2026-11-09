@@ -41,7 +41,10 @@ export default function ChatMessageMedia({
 
   // PDF Viewer Modal state
   const [pdfModalOpen, setPdfModalOpen] = useState(false);
-  const [pdfUseGoogleViewer, setPdfUseGoogleViewer] = useState(false);
+  const [pdfViewMode, setPdfViewMode] = useState<'embed' | 'page'>('embed');
+  const [pdfPage, setPdfPage] = useState<number>(1);
+  const [pdfPageError, setPdfPageError] = useState(false);
+  const [pdfPageZoom, setPdfPageZoom] = useState(1);
 
   // Audio Player state
   const [isPlaying, setIsPlaying] = useState(false);
@@ -60,6 +63,7 @@ export default function ChatMessageMedia({
         setImageModalOpen(false);
         setPdfModalOpen(false);
         setZoomLevel(1);
+        setPdfPageZoom(1);
       }
     };
     if (imageModalOpen || pdfModalOpen) {
@@ -108,35 +112,47 @@ export default function ChatMessageMedia({
 
   const fileName = extractFileName(mediaUrl);
 
-  // Generate first-page thumbnail URL for Cloudinary PDFs
-  const getPdfThumbnailUrl = (url: string) => {
+  // Generate page thumbnail URL for Cloudinary PDFs
+  const getPdfThumbnailUrl = (url: string, page: number = 1) => {
     if (url.includes('cloudinary.com') && url.includes('/upload/')) {
       return url
-        .replace(/\/upload\/(v\d+\/)?/, '/upload/pg_1,w_600,f_auto,q_auto/$1')
+        .replace(/\/upload\/(v\d+\/)?/, `/upload/pg_${page},w_1400,f_auto,q_auto/$1`)
         .replace(/\.pdf(\?.*)?$/i, '.jpg');
     }
     return null;
   };
 
-  const pdfThumbUrl = isPdf ? getPdfThumbnailUrl(mediaUrl) : null;
+  const pdfThumbUrl = isPdf ? getPdfThumbnailUrl(mediaUrl, 1) : null;
+  const proxyPdfUrl = `/api/media/pdf?url=${encodeURIComponent(mediaUrl)}`;
 
-  // Direct download trigger
+  // Direct download trigger (routes PDFs through signed proxy to avoid 401 ACL error)
   const handleDownload = async (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     try {
       setIsDownloading(true);
-      const res = await fetch(mediaUrl);
+      const downloadUrl = isPdf
+        ? `/api/media/pdf?url=${encodeURIComponent(mediaUrl)}&download=true&filename=${encodeURIComponent(fileName)}`
+        : mediaUrl;
+
+      const res = await fetch(downloadUrl);
+      if (!res.ok) throw new Error('Download request failed');
+
       const blob = await res.blob();
       const blobUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = blobUrl;
-      a.download = fileName;
+      a.download = fileName.endsWith('.pdf') || !isPdf ? fileName : `${fileName}.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(blobUrl);
     } catch {
-      window.open(mediaUrl, '_blank');
+      window.open(
+        isPdf
+          ? `/api/media/pdf?url=${encodeURIComponent(mediaUrl)}&download=true&filename=${encodeURIComponent(fileName)}`
+          : mediaUrl,
+        '_blank'
+      );
     } finally {
       setIsDownloading(false);
     }
@@ -446,29 +462,60 @@ export default function ChatMessageMedia({
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center gap-2.5 min-w-0 pr-4">
-                <div className="p-1.5 rounded-lg bg-rose-600/20 text-rose-400 border border-rose-500/30">
+                <div className="p-1.5 rounded-lg bg-rose-600/20 text-rose-400 border border-rose-500/30 flex-shrink-0">
                   <FileText className="w-4 h-4" />
                 </div>
                 <div className="truncate">
                   <h3 className="text-xs sm:text-sm font-semibold text-white truncate max-w-xs sm:max-w-md">
                     {fileName}
                   </h3>
-                  <p className="text-[10px] text-slate-400 font-mono">Interactive PDF Reader</p>
+                  <p className="text-[10px] text-slate-400 font-mono">
+                    {pdfViewMode === 'embed' ? 'Interactive PDF Reader' : `Page ${pdfPage} Preview`}
+                  </p>
                 </div>
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center gap-2 flex-shrink-0">
-                {/* Fallback to Google Docs Viewer if direct iframe fails */}
-                <button
-                  type="button"
-                  onClick={() => setPdfUseGoogleViewer((prev) => !prev)}
-                  className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 hover:text-white transition"
-                  title="Switch PDF rendering mode"
-                >
-                  <RotateCcw className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>{pdfUseGoogleViewer ? 'Native Viewer' : 'Google Docs Engine'}</span>
-                </button>
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                {/* Switch between Native PDF Engine and Rendered Page View */}
+                {pdfThumbUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setPdfViewMode((m) => (m === 'embed' ? 'page' : 'embed'))}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 hover:text-white transition border border-white/10"
+                    title={pdfViewMode === 'embed' ? 'Switch to Page Reader' : 'Switch to Interactive PDF Engine'}
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-cyan-400" />
+                    <span className="hidden sm:inline">
+                      {pdfViewMode === 'embed' ? 'Page View' : 'PDF Engine'}
+                    </span>
+                  </button>
+                )}
+
+                {/* Page View Zoom controls */}
+                {pdfViewMode === 'page' && (
+                  <div className="hidden sm:flex items-center gap-1 bg-slate-800/80 rounded-xl p-0.5 border border-white/10">
+                    <button
+                      type="button"
+                      onClick={() => setPdfPageZoom((z) => Math.max(0.6, Number((z - 0.25).toFixed(2))))}
+                      className="p-1 text-slate-300 hover:text-white rounded"
+                      title="Zoom Out"
+                    >
+                      <ZoomOut className="w-3.5 h-3.5" />
+                    </button>
+                    <span className="text-[10px] font-mono text-emerald-400 px-1">
+                      {Math.round(pdfPageZoom * 100)}%
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setPdfPageZoom((z) => Math.min(2.5, Number((z + 0.25).toFixed(2))))}
+                      className="p-1 text-slate-300 hover:text-white rounded"
+                      title="Zoom In"
+                    >
+                      <ZoomIn className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
 
                 {/* Direct Download */}
                 <button
@@ -476,6 +523,7 @@ export default function ChatMessageMedia({
                   onClick={handleDownload}
                   disabled={isDownloading}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-xs font-semibold text-white transition shadow-sm shadow-rose-600/20"
+                  title="Download PDF"
                 >
                   {isDownloading ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -485,13 +533,13 @@ export default function ChatMessageMedia({
                   <span className="hidden sm:inline">Download</span>
                 </button>
 
-                {/* Open in New Tab */}
+                {/* Open in New Window (via Proxy to avoid 401 ACL error) */}
                 <a
-                  href={mediaUrl}
+                  href={proxyPdfUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
-                  title="Open Original"
+                  title="Open in New Window"
                 >
                   <ExternalLink className="w-4 h-4" />
                 </a>
@@ -513,16 +561,57 @@ export default function ChatMessageMedia({
               className="flex-1 w-full h-full p-2 sm:p-4 overflow-hidden flex items-center justify-center"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="w-full h-full max-w-6xl bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-2xl relative">
-                <iframe
-                  src={
-                    pdfUseGoogleViewer
-                      ? `https://docs.google.com/viewer?url=${encodeURIComponent(mediaUrl)}&embedded=true`
-                      : `${mediaUrl}#toolbar=1`
-                  }
-                  className="w-full h-full border-0 bg-white"
-                  title={fileName}
-                />
+              <div className="w-full h-full max-w-6xl bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-2xl relative flex flex-col">
+                {pdfViewMode === 'embed' ? (
+                  <iframe
+                    src={`${proxyPdfUrl}#toolbar=1`}
+                    className="w-full h-full border-0 bg-white"
+                    title={fileName}
+                  />
+                ) : (
+                  <div className="flex-1 w-full h-full overflow-auto p-4 flex flex-col items-center justify-start bg-slate-950">
+                    <div
+                      className="transition-transform duration-200 shadow-2xl rounded-lg overflow-hidden bg-white max-w-full"
+                      style={{ transform: `scale(${pdfPageZoom})`, transformOrigin: 'top center' }}
+                    >
+                      <img
+                        src={getPdfThumbnailUrl(mediaUrl, pdfPage) || ''}
+                        alt={`Page ${pdfPage}`}
+                        onError={() => setPdfPageError(true)}
+                        className="max-h-[80vh] w-auto object-contain select-none"
+                      />
+                    </div>
+
+                    {/* Multi-page controls */}
+                    <div className="sticky bottom-4 mt-4 flex items-center gap-3 px-4 py-2 bg-slate-900/90 backdrop-blur-md rounded-2xl border border-white/10 shadow-xl">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPdfPage((p) => Math.max(1, p - 1));
+                          setPdfPageError(false);
+                        }}
+                        disabled={pdfPage <= 1}
+                        className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-xs text-white"
+                      >
+                        Prev Page
+                      </button>
+                      <span className="text-xs font-mono text-slate-300">
+                        Page {pdfPage}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPdfPage((p) => p + 1);
+                          setPdfPageError(false);
+                        }}
+                        disabled={pdfPageError}
+                        className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-xs text-white"
+                      >
+                        Next Page
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
